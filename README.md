@@ -1,6 +1,6 @@
 # ⚡ peer-port
 
-> **Zero-config Localhost-to-Global Tunneling CLI with Live Admin HUD & Visual Sticky-Note Bug Reporter.**
+> **Zero-config Localhost-to-Global Tunneling CLI with Executive Admin Center, Live Website Preview, Emergency Kill Switch, and Visual Sticky-Note Bug Reporter.**
 
 Turn any local port (`localhost:3000`, `localhost:5000`) into an instant, secure **Global Public HTTPS URL** (`https://*.trycloudflare.com`) with zero accounts, live telemetry, and an in-browser visual bug reporter.
 
@@ -10,11 +10,13 @@ Turn any local port (`localhost:3000`, `localhost:5000`) into an instant, secure
 
 | Feature | Description |
 |---|---|
-| 🌐 **Instant Global HTTPS Link** | Reachable anywhere in the world on any network (Wi-Fi, 4G/5G, different city). |
-| 🔒 **Optional PIN Lock** | Run with `--pin 1324` to show a sleek frosted-glass lockscreen to unauthorized visitors. |
-| 📊 **Live Admin HUD (`/__peer_admin`)** | Track active requests, total visitors, response times, and live traffic stream in real-time. |
+| 🌐 **Instant Global HTTPS Link** | Reachable anywhere in the world on any network (Wi-Fi, 4G/5G, different city) with automatic routing (`/`, `/home`, `/api/*`). |
+| 🛡️ **Executive Admin Center (`/__peer_admin`)** | Password-protected live management dashboard for real-time telemetry, visitors, and active requests. |
+| 👁️ **In-Dashboard Live Preview** | Responsive live website viewport preview inside the Admin HUD with Desktop, Tablet, and Mobile switches. |
+| 🛑 **Emergency Kill Switch** | 1-click master kill switch to instantly pause external access and return a 503 Maintenance screen. |
+| 🚫 **Page-Level Route Disabling** | Selectively disable specific pages (e.g. `/checkout`) with a 403 Forbidden screen while keeping the rest of the site open. |
 | 📌 **Visual Bug Reporter & Sticky Notes** | Injected floating badge: friends/clients click any button or image and type feedback. Pings your terminal instantly with element selector and device screen size! |
-| 🛣️ **Automatic Route Handling** | Deep routes (`/`, `/home`, `/api/users`), React Router SPA, cookies, forms, and WebSockets work natively. |
+| 🔒 **Optional Visitor PIN Lock** | Run with `--pin <password>` to show a sleek frosted-glass lockscreen to unauthorized visitors. |
 | 📱 **Terminal QR Code** | Instant high-contrast ASCII QR code to scan with any smartphone camera. |
 
 ---
@@ -24,18 +26,21 @@ Turn any local port (`localhost:3000`, `localhost:5000`) into an instant, secure
 Run it directly using `npx`:
 
 ```bash
-# Open access
+# Share local port 3000 globally
 npx peer-port 3000
 
-# With PIN protection (e.g. 1324)
+# With visitor PIN protection (e.g. 1324)
 npx peer-port 3000 --pin 1324
+
+# With custom admin dashboard password
+npx peer-port 3000 --admin-pass mySecret123
 ```
 
 Or install globally:
 
 ```bash
 npm install -g peer-port
-peer-port 3000 --pin 1324
+peer-port 3000
 ```
 
 ---
@@ -47,16 +52,15 @@ peer-port 3000 --pin 1324
 
   🎯 Local App:        http://localhost:3000
   📶 Local LAN:        http://192.168.1.45:3000
-  🔒 PIN Protection:   ACTIVE (PIN: 1324)
+  🔑 Admin Password:   admin_Ankit@1320  (Required to access Admin Center)
+  🔓 Visitor Access:   Open (Anyone with the link can browse)
   📌 Visual Feedback:  ENABLED (Floating badge)
   ⏳ Generating secure public HTTPS link across the global internet...
 
-  🌐 Public Global Link: https://wild-ocean-42.trycloudflare.com
-  📊 Admin HUD:         http://localhost:52419/__peer_admin
-     (Monitor active requests, latency, views & client bug reports in real-time)
+  🌐 Public Website Link: https://wild-ocean-42.trycloudflare.com
 
-  🔒 Visitors must enter PIN 1324 to view your website.
-  Clients can click any element on the page to drop visual sticky-notes & feedback!
+  📊 Executive Admin HUD: http://localhost:52419/__peer_admin
+     (Remote: https://wild-ocean-42.trycloudflare.com/__peer_admin)
 
   Scan QR with your phone to open instantly:
   [ ASCII QR CODE ]
@@ -66,7 +70,24 @@ peer-port 3000 --pin 1324
 
 ---
 
-## 📌 Feature 1: Visual Sticky-Note & Bug Reporter
+## 🛡️ Executive Admin Center (`/__peer_admin`)
+
+Protected by your admin password (default: `admin_Ankit@1320` or `--admin-pass <custom>`):
+
+1. **🌐 Hosted Websites & Links:**
+   - See your active public link and local destination.
+   - **👁️ Live Preview:** Test the responsive layout (Desktop, Tablet, Mobile) without leaving the dashboard.
+   - **🛑 Kill Switch:** Immediately freeze external traffic with a 503 screen if you need to debug or pause access.
+   - **📊 See Requests & Statistics:** Open detailed route-by-route performance telemetry.
+2. **Hierarchical Request Tree & Sub-Assets:**
+   - Primary route visits (e.g. `GET /home`, `GET /checkout`) expand to show all child asset requests (CSS, JS, images, API calls).
+   - **🚫 Disable Page:** Disable specific routes with 1 click to test 403 Forbidden handling.
+3. **📌 Bug Reports & Sticky Notes Tab:**
+   - Review and resolve all client notes submitted via the website.
+
+---
+
+## 📌 Visual Sticky-Note & Bug Reporter
 
 When clients or non-technical friends view your site, they often give vague feedback like *"The layout looks broken on my phone"*.
 
@@ -87,18 +108,7 @@ When clients or non-technical friends view your site, they often give vague feed
 
 ---
 
-## 📊 Feature 2: Live Admin HUD (`/__peer_admin`)
-
-Open `/__peer_admin` (or the local link printed in your terminal) to monitor everything happening in real-time:
-* **Active Requests:** How many requests are in flight right now.
-* **Total Requests & Unique Visitors:** Live count of visitors and views.
-* **Average Latency:** Millisecond response time tracker.
-* **Live Request Stream:** Real-time log table showing HTTP methods, paths, status codes, and timings.
-* **Sticky-Notes Feed:** Visual list of all submitted client comments with element tags.
-
----
-
-## 🔒 Feature 3: PIN Lockscreen (`--pin`)
+## 🔒 Optional Visitor PIN Lockscreen (`--pin`)
 
 Keep your preview private:
 * Run `peer-port 3000 --pin 1324`.
@@ -118,7 +128,8 @@ peer-port [port] [options]
 | `[port]` | The local port to expose | `3000` |
 | `-p, --port <number>` | Target local port | `3000` |
 | `-h, --host <host>` | Target local host | `localhost` |
-| `--pin <password>` | Protect link with a PIN or password | `None` |
+| `--admin-pass <password>` | Custom password for the `/__peer_admin` dashboard | `admin_Ankit@1320` |
+| `--pin <password>` | Protect website with a PIN or password for visitors | `None` |
 | `--no-feedback` | Disable the floating visual feedback widget | `false` |
 | `--p2p` | Switch to direct WebRTC P2P DataChannel mode | `false` |
 | `--no-qr` | Disable terminal QR code output | `false` |
@@ -150,10 +161,8 @@ npm run build
    npm publish --access public
    ```
 
-*(If the package name `peer-port` is taken on the public registry, update `"name": "@your-username/peer-port"` in `package.json` before publishing.)*
-
 ---
 
 ## 📄 License
 
-MIT © 2026
+MIT © 2026 Ankit Dhiman

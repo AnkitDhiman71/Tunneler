@@ -30,8 +30,19 @@
     "mern",
     "datachannel"
   ],
-  "author": "",
+  "author": "Ankit Dhiman",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AnkitDhiman71/Tunneler.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AnkitDhiman71/Tunneler/issues"
+  },
+  "homepage": "https://github.com/AnkitDhiman71/Tunneler#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "dependencies": {
     "@types/node": "^24.11.0",
     "@types/qrcode-terminal": "^0.12.2",
