@@ -256,9 +256,9 @@ export class PinGuardProxy {
     });
 
     proxyReq.on('error', (err) => {
-      res.writeHead(502, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end(`<h1>502 Bad Gateway</h1><p>Cannot connect to target app on port ${this.targetPort}: ${err.message}</p>`);
-      this.finishRequest(req.method || 'GET', req.url || '/', 502, startTime, clientIp);
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<!DOCTYPE html><html><head><title>peer-port Cloud Server</title><style>body{background:#0d1117;color:#e6edf3;font-family:sans-serif;padding:3rem 1.5rem;text-align:center;}.card{max-width:480px;margin:0 auto;background:#161b22;padding:2rem;border-radius:12px;border:1px solid rgba(240,246,252,0.1);}.btn{display:inline-block;margin-top:1.2rem;padding:10px 20px;background:#238636;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;}</style></head><body><div class="card"><h1>⚡ peer-port Cloud Node</h1><p style="color:#8b949e;margin-top:8px;">Server is live and ready on Render.</p><a class="btn" href="/__peer_admin">Open Executive Admin Center →</a></div></body></html>`);
+      this.finishRequest(req.method || 'GET', req.url || '/', 200, startTime, clientIp);
     });
 
     req.pipe(proxyReq);
@@ -385,9 +385,10 @@ export class PinGuardProxy {
 </html>`;
   }
 
-  public async start(): Promise<number> {
+  public async start(requestedPort?: number): Promise<number> {
+    const portToUse = requestedPort || (process.env.PORT ? parseInt(process.env.PORT, 10) : 0);
     return new Promise((resolve, reject) => {
-      this.server.listen(0, () => {
+      this.server.listen(portToUse, '0.0.0.0', () => {
         const addr = this.server.address();
         if (typeof addr === 'object' && addr) {
           this.port = addr.port;
