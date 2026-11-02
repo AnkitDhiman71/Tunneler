@@ -42,13 +42,8 @@ export async function startGlobalTunnel(options: GlobalTunnelOptions): Promise<G
   });
   const tunnelPort = await pinGuard.start();
 
-  const adminPass = pinGuard.telemetry.adminPassword;
-  console.log(`  🔑 Admin Password:   ${pc.bold(pc.yellow(adminPass))}  (Required to access Admin Center)`);
-
   if (options.pin) {
     console.log(`  🔒 Visitor PIN:      ${pc.bold(pc.magenta(`ACTIVE (PIN: ${options.pin})`))}`);
-  } else {
-    console.log(`  🔓 Visitor Access:   ${pc.dim('Open (Anyone with the link can browse)')}`);
   }
 
   const feedbackStatus = options.enableFeedback !== false ? pc.green('ENABLED (Floating badge)') : pc.dim('Disabled');
@@ -73,11 +68,8 @@ export async function startGlobalTunnel(options: GlobalTunnelOptions): Promise<G
   const publicUrl = await tunnel.getURL();
   pinGuard.telemetry.setPublicUrl(publicUrl);
   const localAdminUrl = `http://localhost:${tunnelPort}/__peer_admin`;
-  const publicAdminUrl = `${publicUrl}/__peer_admin`;
 
   console.log(`\n  🌐 ${pc.bold(pc.green('Public Website Link:'))} ${pc.underline(pc.bold(pc.cyan(publicUrl)))}\n`);
-  console.log(`  📊 ${pc.bold(pc.magenta('Executive Admin HUD:'))} ${pc.underline(pc.magenta(localAdminUrl))}`);
-  console.log(`     (Remote: ${pc.dim(publicAdminUrl)})\n`);
 
   if (!options.noQr) {
     console.log(pc.dim('  Scan QR with your phone to open instantly:'));
@@ -92,7 +84,7 @@ export async function startGlobalTunnel(options: GlobalTunnelOptions): Promise<G
     publicUrl,
     lanUrl,
     adminUrl: localAdminUrl,
-    adminPassword: adminPass,
+    adminPassword: pinGuard.telemetry.adminPassword,
     pin: options.pin,
     close: async () => {
       pinGuard.close();

@@ -11,7 +11,7 @@ const program = new Command();
 program
   .name('peer-port')
   .description('Instant Global Public Tunneling CLI - share localhost with automatic routing, password-protected admin telemetry, and visual sticky-notes')
-  .version('1.0.0')
+  .version('1.0.1')
   .argument('[port]', 'Local port to expose (e.g. 3000, 5000)', '3000')
   .option('-p, --port <number>', 'Local target port', '3000')
   .option('-h, --host <host>', 'Local target host', 'localhost')

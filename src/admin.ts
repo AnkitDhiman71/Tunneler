@@ -57,8 +57,7 @@ export class AdminTelemetry {
   };
 
   constructor(adminPassword?: string) {
-    // Use provided admin password, env variable, or default to user preference
-    this.adminPassword = adminPassword || process.env.ADMIN_PASSWORD || 'admin_Ankit@1320';
+    this.adminPassword = adminPassword || process.env.ADMIN_PASSWORD || 'admin-' + Math.random().toString(36).substring(2, 10);
   }
 
   public setPublicUrl(url: string): void {

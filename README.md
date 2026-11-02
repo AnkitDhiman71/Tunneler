@@ -52,15 +52,10 @@ peer-port 3000
 
   🎯 Local App:        http://localhost:3000
   📶 Local LAN:        http://192.168.1.45:3000
-  🔑 Admin Password:   admin_Ankit@1320  (Required to access Admin Center)
-  🔓 Visitor Access:   Open (Anyone with the link can browse)
   📌 Visual Feedback:  ENABLED (Floating badge)
   ⏳ Generating secure public HTTPS link across the global internet...
 
   🌐 Public Website Link: https://wild-ocean-42.trycloudflare.com
-
-  📊 Executive Admin HUD: http://localhost:52419/__peer_admin
-     (Remote: https://wild-ocean-42.trycloudflare.com/__peer_admin)
 
   Scan QR with your phone to open instantly:
   [ ASCII QR CODE ]
@@ -72,7 +67,7 @@ peer-port 3000
 
 ## 🛡️ Executive Admin Center (`/__peer_admin`)
 
-Protected by your admin password (default: `admin_Ankit@1320` or `--admin-pass <custom>`):
+Protected by your custom admin password (pass `--admin-pass <password>` or set `ADMIN_PASSWORD` in your environment):
 
 1. **🌐 Hosted Websites & Links:**
    - See your active public link and local destination.
@@ -128,7 +123,7 @@ peer-port [port] [options]
 | `[port]` | The local port to expose | `3000` |
 | `-p, --port <number>` | Target local port | `3000` |
 | `-h, --host <host>` | Target local host | `localhost` |
-| `--admin-pass <password>` | Custom password for the `/__peer_admin` dashboard | `admin_Ankit@1320` |
+| `--admin-pass <password>` | Custom password for the `/__peer_admin` dashboard | Auto-generated |
 | `--pin <password>` | Protect website with a PIN or password for visitors | `None` |
 | `--no-feedback` | Disable the floating visual feedback widget | `false` |
 | `--p2p` | Switch to direct WebRTC P2P DataChannel mode | `false` |

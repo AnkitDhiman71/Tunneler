@@ -1,13 +1,13 @@
 {
   "name": "peer-port",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Instant Global Public Tunneling CLI - share localhost to anyone in the world with automatic routing",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "peer-port": "./dist/peer-port.js"
+    "peer-port": "dist/peer-port.js"
   },
   "files": [
     "dist",
