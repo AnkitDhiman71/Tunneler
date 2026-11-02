@@ -71,6 +71,7 @@ export async function startGlobalTunnel(options: GlobalTunnelOptions): Promise<G
   }
 
   const publicUrl = await tunnel.getURL();
+  pinGuard.telemetry.setPublicUrl(publicUrl);
   const localAdminUrl = `http://localhost:${tunnelPort}/__peer_admin`;
   const publicAdminUrl = `${publicUrl}/__peer_admin`;
 

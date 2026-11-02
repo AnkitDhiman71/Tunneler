@@ -31,6 +31,8 @@ export class PinGuardProxy {
     this.pin = options.pin ? String(options.pin).trim() : undefined;
     this.enableFeedback = options.enableFeedback !== false;
     this.telemetry = new AdminTelemetry(options.adminPassword);
+    this.telemetry.targetHost = this.targetHost;
+    this.telemetry.targetPort = this.targetPort;
     this.authToken = crypto.randomBytes(24).toString('hex');
     this.adminAuthToken = crypto.randomBytes(24).toString('hex');
 
@@ -52,6 +54,14 @@ export class PinGuardProxy {
   private handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+
+    if (!this.telemetry.publicUrl) {
+      const host = req.headers['x-forwarded-host'] || req.headers.host;
+      const proto = req.headers['x-forwarded-proto'] || 'http';
+      if (host) {
+        this.telemetry.publicUrl = `${proto}://${host}`;
+      }
+    }
 
     // 1. Admin Login POST
     if (url.pathname === '/__peer_admin_login' && req.method === 'POST') {

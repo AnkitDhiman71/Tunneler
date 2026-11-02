@@ -34,6 +34,10 @@ export interface ParentRequestGroup {
 }
 
 export class AdminTelemetry {
+  public publicUrl = '';
+  public targetHost = 'localhost';
+  public targetPort = 3000;
+  public startedAt = Date.now();
   public totalRequests = 0;
   public activeRequests = 0;
   public totalDuration = 0;
@@ -55,6 +59,10 @@ export class AdminTelemetry {
   constructor(adminPassword?: string) {
     // Use provided admin password, env variable, or default to user preference
     this.adminPassword = adminPassword || process.env.ADMIN_PASSWORD || 'admin_Ankit@1320';
+  }
+
+  public setPublicUrl(url: string): void {
+    this.publicUrl = url;
   }
 
   public getAssetType(url: string, headers: Record<string, any>): string {
@@ -152,7 +160,12 @@ export class AdminTelemetry {
 
   public getStats() {
     const avgLatency = this.totalRequests > 0 ? Math.round(this.totalDuration / this.totalRequests) : 0;
+    const effectiveUrl = this.publicUrl || `http://${this.targetHost}:${this.targetPort}`;
     return {
+      publicUrl: effectiveUrl,
+      targetHost: this.targetHost,
+      targetPort: this.targetPort,
+      startedAt: this.startedAt,
       totalRequests: this.totalRequests,
       activeRequests: this.activeRequests,
       uniqueVisitors: this.uniqueVisitors.size,
@@ -161,7 +174,7 @@ export class AdminTelemetry {
       disabledPages: Array.from(this.disabledPages),
       statusCounts: this.statusCounts,
       feedbacksCount: this.feedbacks.filter((f) => !f.resolved).length,
-      requestGroups: this.requestGroups.slice(0, 30),
+      requestGroups: this.requestGroups.slice(0, 50),
       feedbacks: this.feedbacks,
     };
   }
@@ -253,7 +266,7 @@ export class AdminTelemetry {
     .tab-btn.active { background: #58a6ff; color: #0d1117; border-color: #58a6ff; }
     main { max-width: 1250px; width: 100%; margin: 0 auto; padding: 1.5rem; flex: 1; display: flex; flex-direction: column; gap: 1.5rem; }
     
-    /* KILL SWITCH BANNER */
+    /* KILL SWITCH TOP BANNER */
     .kill-banner {
       background: #161b22;
       border: 1px solid rgba(240, 246, 252, 0.15);
@@ -301,16 +314,160 @@ export class AdminTelemetry {
       padding: 1.25rem;
       flex: 1;
     }
-    .panel h2 { font-size: 1.1rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; }
+    .panel-header {
+      margin-bottom: 1.2rem;
+    }
+    .panel-header h2 { font-size: 1.15rem; display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+    .panel-header p { font-size: 0.85rem; color: #8b949e; }
 
-    /* GROUPED HIERARCHICAL REQUESTS TABLE */
+    /* HOSTED WEBSITES TABLE */
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    th { text-align: left; padding: 12px 14px; border-bottom: 1px solid rgba(240, 246, 252, 0.15); color: #8b949e; font-weight: 600; }
+    td { padding: 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); vertical-align: middle; }
+    
+    .website-row {
+      background: rgba(255, 255, 255, 0.02);
+      transition: background 0.15s;
+    }
+    .website-row:hover { background: rgba(88, 166, 255, 0.04); }
+
+    .tunnel-link {
+      color: #58a6ff;
+      font-weight: 700;
+      text-decoration: none;
+      font-size: 0.95rem;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .tunnel-link:hover { text-decoration: underline; }
+
+    .btn-copy {
+      background: rgba(240, 246, 252, 0.08);
+      border: 1px solid rgba(240, 246, 252, 0.15);
+      color: #8b949e;
+      border-radius: 4px;
+      padding: 2px 7px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      margin-left: 6px;
+    }
+    .btn-copy:hover { color: #fff; background: rgba(240, 246, 252, 0.15); }
+
+    .status-badge-live {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(63, 185, 80, 0.15); color: #3fb950; border: 1px solid #3fb950;
+      padding: 3px 10px; border-radius: 9999px; font-weight: 600; font-size: 0.78rem;
+    }
+    .status-badge-paused {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(248, 81, 73, 0.15); color: #f85149; border: 1px solid #f85149;
+      padding: 3px 10px; border-radius: 9999px; font-weight: 600; font-size: 0.78rem;
+    }
+
+    .btn-actions-group {
+      display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    }
+    .btn-live-preview {
+      background: rgba(88, 166, 255, 0.15);
+      border: 1px solid #58a6ff;
+      color: #58a6ff;
+      padding: 7px 13px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 5px;
+      transition: all 0.15s;
+    }
+    .btn-live-preview:hover { background: #58a6ff; color: #0d1117; }
+
+    .btn-row-kill {
+      padding: 7px 13px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      display: inline-flex; align-items: center; gap: 5px;
+      transition: all 0.15s;
+    }
+    .btn-row-kill.kill {
+      background: rgba(248, 81, 73, 0.15); border-color: #da3633; color: #f85149;
+    }
+    .btn-row-kill.kill:hover { background: #da3633; color: #fff; }
+    .btn-row-kill.resume {
+      background: rgba(63, 185, 80, 0.15); border-color: #238636; color: #3fb950;
+    }
+    .btn-row-kill.resume:hover { background: #238636; color: #fff; }
+
+    .btn-see-requests {
+      background: #21262d;
+      border: 1px solid rgba(240, 246, 252, 0.2);
+      color: #e6edf3;
+      padding: 7px 13px;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex; align-items: center; gap: 5px;
+      transition: all 0.15s;
+    }
+    .btn-see-requests:hover { border-color: #58a6ff; color: #58a6ff; }
+
+    /* MODAL SYSTEM */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(8px);
+      display: none; align-items: center; justify-content: center; z-index: 999; padding: 1.5rem;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-container {
+      background: #161b22; border: 1px solid rgba(240, 246, 252, 0.15); border-radius: 14px;
+      width: 100%; max-width: 1100px; max-height: 90vh; display: flex; flex-direction: column;
+      overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.8);
+    }
+    .modal-header {
+      padding: 1.1rem 1.5rem; border-bottom: 1px solid rgba(240, 246, 252, 0.1);
+      display: flex; justify-content: space-between; align-items: center;
+      background: rgba(22, 27, 34, 0.95);
+    }
+    .modal-header h3 { font-size: 1.15rem; display: flex; align-items: center; gap: 8px; }
+    .btn-close-modal {
+      background: transparent; border: none; color: #8b949e; font-size: 1.5rem; cursor: pointer; line-height: 1; padding: 0 4px;
+    }
+    .btn-close-modal:hover { color: #fff; }
+    .modal-body {
+      padding: 1.5rem; overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 1.25rem;
+    }
+
+    /* DEVICE PREVIEW TOOLBAR */
+    .preview-toolbar {
+      display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+      background: #0d1117; padding: 8px 14px; border-radius: 8px; border: 1px solid rgba(240,246,252,0.1);
+    }
+    .device-buttons { display: flex; gap: 6px; }
+    .device-btn {
+      background: transparent; border: 1px solid rgba(240,246,252,0.15); color: #8b949e;
+      padding: 5px 12px; border-radius: 5px; font-size: 0.8rem; cursor: pointer; font-weight: 600;
+    }
+    .device-btn.active { background: #58a6ff; color: #0d1117; border-color: #58a6ff; }
+    .frame-container {
+      width: 100%; margin: 0 auto; transition: max-width 0.25s ease;
+      background: #000; border-radius: 8px; overflow: hidden; border: 1px solid rgba(255,255,255,0.15);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    #preview-iframe {
+      width: 100%; height: 580px; border: none; background: #fff; display: block;
+    }
+
+    /* GROUPED HIERARCHICAL REQUESTS TABLE (Inside Modal) */
     .parent-row {
       cursor: pointer;
       background: rgba(255, 255, 255, 0.02);
       transition: background 0.15s;
     }
     .parent-row:hover { background: rgba(88, 166, 255, 0.06); }
-    .parent-row td { font-weight: 600; padding: 12px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); }
+    .parent-row td { font-weight: 600; padding: 12px 14px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); font-family: monospace; }
     .child-row {
       background: #090d13;
       display: none;
@@ -321,36 +478,49 @@ export class AdminTelemetry {
       font-size: 0.8rem;
       color: #8b949e;
       border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+      font-family: monospace;
     }
     .expand-arrow { display: inline-block; width: 16px; transition: transform 0.2s; color: #58a6ff; }
     .expand-arrow.open { transform: rotate(90deg); }
 
-    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; font-family: monospace; }
-    th { text-align: left; padding: 10px 14px; border-bottom: 1px solid rgba(240, 246, 252, 0.1); color: #8b949e; }
     .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
     .badge-get { background: rgba(63, 185, 80, 0.15); color: #3fb950; }
     .badge-post { background: rgba(88, 166, 255, 0.15); color: #58a6ff; }
     .badge-put { background: rgba(210, 153, 34, 0.15); color: #d29922; }
     .badge-delete { background: rgba(248, 81, 73, 0.15); color: #f85149; }
+    .badge-head { background: rgba(139, 148, 158, 0.15); color: #8b949e; }
     .status-2xx { color: #3fb950; }
     .status-3xx { color: #58a6ff; }
     .status-4xx { color: #d29922; }
     .status-5xx { color: #f85149; font-weight: 600; }
     
-    .action-btn {
-      background: transparent;
-      border: 1px solid rgba(240, 246, 252, 0.2);
-      color: #8b949e;
-      padding: 3px 8px;
+    .action-btn-ban {
+      background: rgba(248, 81, 73, 0.12);
+      border: 1px solid rgba(248, 81, 73, 0.3);
+      color: #f85149;
+      padding: 4px 9px;
       border-radius: 4px;
       font-size: 0.75rem;
+      font-weight: 600;
       cursor: pointer;
     }
-    .action-btn:hover { color: #f85149; border-color: #f85149; }
+    .action-btn-ban:hover { background: #da3633; color: #fff; }
+
+    .action-btn-unban {
+      background: rgba(63, 185, 80, 0.15);
+      border: 1px solid #3fb950;
+      color: #3fb950;
+      padding: 4px 9px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .action-btn-unban:hover { background: #238636; color: #fff; }
 
     /* PAGE BLOCKLIST STYLES */
     .ban-page-box {
-      display: flex; gap: 8px; margin-bottom: 1rem;
+      display: flex; gap: 8px; margin-bottom: 0.75rem;
     }
     .ban-page-box input {
       flex: 1; max-width: 320px;
@@ -387,14 +557,14 @@ export class AdminTelemetry {
       </div>
     </div>
     <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('traffic', this)">📊 Grouped Requests</button>
+      <button class="tab-btn active" onclick="switchTab('websites', this)">🌐 Hosted Websites</button>
       <button class="tab-btn" onclick="switchTab('feedback', this)">📌 Bug Reports (${stats.feedbacksCount})</button>
       <button class="tab-btn" onclick="switchTab('pages', this)">🚫 Blocked Pages (${stats.disabledPages.length})</button>
     </div>
   </header>
 
   <main>
-    <!-- KILL SWITCH -->
+    <!-- KILL SWITCH TOP BANNER -->
     <div class="kill-banner">
       <div class="kill-info">
         <h3 id="kill-title">${stats.isPaused ? '⚠️ Public Link is PAUSED' : '🟢 Public Link is ACTIVE'}</h3>
@@ -411,7 +581,7 @@ export class AdminTelemetry {
       </div>
     </div>
 
-    <!-- STATS -->
+    <!-- STATS OVERVIEW -->
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-title">Active Requests</div>
@@ -431,67 +601,64 @@ export class AdminTelemetry {
       </div>
     </div>
 
-    <!-- TAB 1: GROUPED REQUESTS TREE -->
-    <div class="panel" id="panel-traffic">
-      <h2>📊 Grouped Page Requests (Click to view child assets & requests)</h2>
+    <!-- TAB 1: HOSTED WEBSITES TABLE -->
+    <div class="panel" id="panel-websites">
+      <div class="panel-header">
+        <h2>🌐 Hosted Websites & Active Public Links</h2>
+        <p>Manage your live tunnels, preview website interfaces, toggle instant kill switches, and inspect request trees.</p>
+      </div>
+
       <table>
         <thead>
           <tr>
-            <th style="width: 30px;"></th>
-            <th>Method</th>
-            <th>Primary Route / Page</th>
+            <th>Hosted Website / Public Link</th>
+            <th>Local Destination</th>
             <th>Status</th>
-            <th>Duration</th>
-            <th>Sub-requests</th>
-            <th>IP Address</th>
-            <th>Time</th>
+            <th>Activity Summary</th>
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody id="table-traffic">
-          ${stats.requestGroups
-            .map(
-              (group) => `
-            <tr class="parent-row" onclick="toggleGroup('${group.id}')">
-              <td><span class="expand-arrow" id="arrow-${group.id}">▶</span></td>
-              <td><span class="badge badge-${group.method.toLowerCase()}">${group.method}</span></td>
-              <td style="color: #fff;">${group.url}</td>
-              <td class="status-${Math.floor(group.status / 100)}xx">${group.status}</td>
-              <td>${group.duration}ms</td>
-              <td style="color: #58a6ff;">${group.subRequests.length} sub-assets</td>
-              <td>${group.ip}</td>
-              <td>${new Date(group.timestamp).toLocaleTimeString()}</td>
-              <td>
-                <button class="action-btn" onclick="event.stopPropagation(); banPage('${group.url}')" title="Disable this page">🚫 Disable Page</button>
-              </td>
-            </tr>
-            ${group.subRequests
-              .map(
-                (sub) => `
-              <tr class="child-row child-of-${group.id}">
-                <td></td>
-                <td><span style="font-size: 0.7rem; color: #8b949e;">${sub.method}</span></td>
-                <td>↳ ${sub.url} <span style="font-size: 0.7rem; color: #58a6ff;">(${sub.type})</span></td>
-                <td class="status-${Math.floor(sub.status / 100)}xx">${sub.status}</td>
-                <td>${sub.duration}ms</td>
-                <td>-</td>
-                <td>-</td>
-                <td>${new Date(sub.timestamp).toLocaleTimeString()}</td>
-                <td></td>
-              </tr>
-            `
-              )
-              .join('')}
-          `
-            )
-            .join('')}
+        <tbody id="table-websites">
+          <tr class="website-row">
+            <td>
+              <a href="${stats.publicUrl}" target="_blank" class="tunnel-link" id="site-link">
+                ${stats.publicUrl} ↗
+              </a>
+              <button class="btn-copy" onclick="copyText('${stats.publicUrl}')" title="Copy public link">📋 Copy</button>
+            </td>
+            <td style="font-family: monospace; color: #8b949e;" id="site-target">
+              http://${stats.targetHost}:${stats.targetPort}
+            </td>
+            <td id="site-status-badge">
+              ${stats.isPaused ? '<span class="status-badge-paused">🔴 PAUSED (503)</span>' : '<span class="status-badge-live">🟢 LIVE & ONLINE</span>'}
+            </td>
+            <td id="site-activity-summary" style="color: #e6edf3; font-weight: 500;">
+              ${stats.totalRequests} reqs • ${stats.uniqueVisitors} visitors • ${stats.avgLatency}ms avg
+            </td>
+            <td>
+              <div class="btn-actions-group">
+                <button class="btn-live-preview" onclick="openLivePreviewModal('${stats.publicUrl}')" title="Live Preview Website">
+                  👁️ Live Preview
+                </button>
+                <button id="btn-row-kill" class="btn-row-kill ${stats.isPaused ? 'resume' : 'kill'}" onclick="toggleKillSwitch()" title="Toggle Kill Switch">
+                  ${stats.isPaused ? '▶ Resume' : '🛑 Kill Switch'}
+                </button>
+                <button class="btn-see-requests" onclick="openRequestsModal()" title="Inspect child requests & statistics">
+                  📊 See Requests & Statistics
+                </button>
+              </div>
+            </td>
+          </tr>
         </tbody>
       </table>
     </div>
 
     <!-- TAB 2: BUG REPORTS -->
     <div class="panel" id="panel-feedback" style="display: none;">
-      <h2>📌 Client Sticky Notes & Bug Reports</h2>
+      <div class="panel-header">
+        <h2>📌 Client Sticky Notes & Bug Reports</h2>
+        <p>Interactive feedback submitted by clients using the floating "Drop Comment" badge on your website.</p>
+      </div>
       <div id="feedback-list">
         ${
           stats.feedbacks.length === 0
@@ -509,7 +676,7 @@ export class AdminTelemetry {
                     f.elementText ? `("${escapeHtml(f.elementText)}")` : ''
                   }</div>
             <div>
-              <button class="action-btn" onclick="toggleResolveFeedback('${f.id}')">
+              <button class="device-btn" onclick="toggleResolveFeedback('${f.id}')">
                 ${f.resolved ? '↩ Re-open' : '✔ Mark Resolved'}
               </button>
             </div>
@@ -523,10 +690,10 @@ export class AdminTelemetry {
 
     <!-- TAB 3: DISABLED PAGES BLOCKLIST -->
     <div class="panel" id="panel-pages" style="display: none;">
-      <h2>🚫 Disabled Pages / Routes (Block specific pages only)</h2>
-      <p style="color: #8b949e; font-size: 0.85rem; margin-bottom: 1rem;">
-        Disabled pages return a 403 Forbidden screen to visitors, while the rest of your website remains active.
-      </p>
+      <div class="panel-header">
+        <h2>🚫 Blocked Pages (Route-Level Security)</h2>
+        <p>Disabled routes return a 403 Forbidden screen to visitors while the rest of your website remains fully accessible.</p>
+      </div>
 
       <div class="ban-page-box">
         <input type="text" id="input-ban-route" placeholder="e.g. /checkout or /admin or /settings" />
@@ -542,7 +709,7 @@ export class AdminTelemetry {
                   (page) => `
           <div style="background: #0d1117; border: 1px solid rgba(240,246,252,0.1); padding: 10px 14px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
             <span style="font-family: monospace; color: #f85149; font-weight: 600;">🚫 ${page}</span>
-            <button class="action-btn" onclick="unbanPage('${page}')" style="color:#3fb950; border-color:#3fb950;">✔ Re-enable Page</button>
+            <button class="action-btn-unban" onclick="unbanPage('${page}')">✔ Re-enable Page</button>
           </div>
         `
                 )
@@ -552,11 +719,141 @@ export class AdminTelemetry {
     </div>
   </main>
 
+  <!-- MODAL 1: LIVE PREVIEW MODAL -->
+  <div class="modal-backdrop" id="modal-preview" onclick="if(event.target === this) closeLivePreviewModal()">
+    <div class="modal-container" style="max-width: 1000px;">
+      <div class="modal-header">
+        <h3>👁️ Live Website Preview — <span id="preview-modal-url" style="color: #58a6ff; font-weight: normal; font-size: 0.95rem;">${stats.publicUrl}</span></h3>
+        <button class="btn-close-modal" onclick="closeLivePreviewModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="preview-toolbar">
+          <div class="device-buttons">
+            <button class="device-btn active" id="btn-dev-desk" onclick="setPreviewDevice('desktop')">🖥️ Desktop (100%)</button>
+            <button class="device-btn" id="btn-dev-tab" onclick="setPreviewDevice('tablet')">💻 Tablet (768px)</button>
+            <button class="device-btn" id="btn-dev-mob" onclick="setPreviewDevice('mobile')">📱 Mobile (375px)</button>
+          </div>
+          <div>
+            <a id="preview-new-tab" href="/" target="_blank" style="color: #58a6ff; font-size: 0.82rem; text-decoration: none; font-weight: 600;">Open in New Tab ↗</a>
+          </div>
+        </div>
+
+        <div class="frame-container" id="frame-wrap" style="max-width: 100%;">
+          <iframe id="preview-iframe" src="about:blank"></iframe>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: REQUESTS & STATISTICS MODAL -->
+  <div class="modal-backdrop" id="modal-requests" onclick="if(event.target === this) closeRequestsModal()">
+    <div class="modal-container" style="max-width: 1100px;">
+      <div class="modal-header">
+        <h3>📊 Requests & Performance Analytics — <span id="req-modal-url" style="color: #58a6ff; font-weight: normal; font-size: 0.95rem;">${stats.publicUrl}</span></h3>
+        <button class="btn-close-modal" onclick="closeRequestsModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <!-- Quick stats bar inside modal -->
+        <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr);">
+          <div class="stat-card" style="padding: 0.8rem 1rem;">
+            <div class="stat-title">2xx Success</div>
+            <div class="stat-value" id="modal-val-2xx" style="color: #3fb950; font-size: 1.3rem;">${stats.statusCounts['2xx'] || 0}</div>
+          </div>
+          <div class="stat-card" style="padding: 0.8rem 1rem;">
+            <div class="stat-title">3xx Redirects</div>
+            <div class="stat-value" id="modal-val-3xx" style="color: #58a6ff; font-size: 1.3rem;">${stats.statusCounts['3xx'] || 0}</div>
+          </div>
+          <div class="stat-card" style="padding: 0.8rem 1rem;">
+            <div class="stat-title">4xx Client Errors</div>
+            <div class="stat-value" id="modal-val-4xx" style="color: #d29922; font-size: 1.3rem;">${stats.statusCounts['4xx'] || 0}</div>
+          </div>
+          <div class="stat-card" style="padding: 0.8rem 1rem;">
+            <div class="stat-title">5xx Server Errors</div>
+            <div class="stat-value" id="modal-val-5xx" style="color: #f85149; font-size: 1.3rem;">${stats.statusCounts['5xx'] || 0}</div>
+          </div>
+        </div>
+
+        <!-- Disable Page Tool inside modal -->
+        <div style="background: rgba(22, 27, 34, 0.6); border: 1px solid rgba(240,246,252,0.1); border-radius: 8px; padding: 12px 14px;">
+          <div style="font-size: 0.85rem; font-weight: 600; margin-bottom: 6px;">🚫 Disable Page Control</div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="modal-input-ban" placeholder="Enter route e.g. /checkout or /about" style="flex: 1; max-width: 320px; background: #0d1117; border: 1px solid rgba(240,246,252,0.2); border-radius: 6px; padding: 6px 10px; color: #fff; font-size: 0.85rem;" />
+            <button onclick="modalAddBanRoute()" style="background: #da3633; color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-weight: 600; font-size: 0.85rem; cursor: pointer;">🚫 Disable Page</button>
+          </div>
+        </div>
+
+        <div>
+          <h4 style="font-size: 0.95rem; margin-bottom: 8px; color: #e6edf3;">Grouped Page Requests & Sub-Assets (Click row to expand child assets)</h4>
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 30px;"></th>
+                <th>Method</th>
+                <th>Primary Route / Page</th>
+                <th>Status</th>
+                <th>Duration</th>
+                <th>Sub-requests</th>
+                <th>IP Address</th>
+                <th>Time</th>
+                <th>Page Action</th>
+              </tr>
+            </thead>
+            <tbody id="modal-table-traffic">
+              ${stats.requestGroups
+                .map((group) => {
+                  const isBanned = stats.disabledPages.includes(group.url.toLowerCase());
+                  return `
+                <tr class="parent-row" onclick="toggleGroup('${group.id}')">
+                  <td><span class="expand-arrow" id="arrow-${group.id}">▶</span></td>
+                  <td><span class="badge badge-${group.method.toLowerCase()}">${group.method}</span></td>
+                  <td style="color: #fff;">${group.url}</td>
+                  <td class="status-${Math.floor(group.status / 100)}xx">${group.status}</td>
+                  <td>${group.duration}ms</td>
+                  <td style="color: #58a6ff;">${group.subRequests.length} sub-assets</td>
+                  <td>${group.ip}</td>
+                  <td>${new Date(group.timestamp).toLocaleTimeString()}</td>
+                  <td>
+                    ${
+                      isBanned
+                        ? `<button class="action-btn-unban" onclick="event.stopPropagation(); unbanPage('${group.url}')" title="Re-enable page">✅ Enable Page</button>`
+                        : `<button class="action-btn-ban" onclick="event.stopPropagation(); banPage('${group.url}')" title="Disable this page">🚫 Disable Page</button>`
+                    }
+                  </td>
+                </tr>
+                ${group.subRequests
+                  .map(
+                    (sub) => `
+                  <tr class="child-row child-of-${group.id}">
+                    <td></td>
+                    <td><span style="font-size: 0.7rem; color: #8b949e;">${sub.method}</span></td>
+                    <td>↳ ${sub.url} <span style="font-size: 0.7rem; color: #58a6ff;">(${sub.type})</span></td>
+                    <td class="status-${Math.floor(sub.status / 100)}xx">${sub.status}</td>
+                    <td>${sub.duration}ms</td>
+                    <td>-</td>
+                    <td>-</td>
+                    <td>${new Date(sub.timestamp).toLocaleTimeString()}</td>
+                    <td></td>
+                  </tr>
+                `
+                  )
+                  .join('')}
+              `;
+                })
+                .join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
+    let currentStats = ${JSON.stringify(stats)};
+
     function switchTab(tab, btn) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById('panel-traffic').style.display = tab === 'traffic' ? 'block' : 'none';
+      document.getElementById('panel-websites').style.display = tab === 'websites' ? 'block' : 'none';
       document.getElementById('panel-feedback').style.display = tab === 'feedback' ? 'block' : 'none';
       document.getElementById('panel-pages').style.display = tab === 'pages' ? 'block' : 'none';
     }
@@ -564,6 +861,7 @@ export class AdminTelemetry {
     function toggleGroup(id) {
       const rows = document.querySelectorAll('.child-of-' + id);
       const arrow = document.getElementById('arrow-' + id);
+      if (!arrow) return;
       const isCurrentlyOpen = arrow.classList.contains('open');
 
       if (isCurrentlyOpen) {
@@ -572,6 +870,46 @@ export class AdminTelemetry {
       } else {
         arrow.classList.add('open');
         rows.forEach(r => r.classList.add('open'));
+      }
+    }
+
+    /* MODAL CONTROLS */
+    function openLivePreviewModal(url) {
+      document.getElementById('preview-iframe').src = '/';
+      document.getElementById('modal-preview').classList.add('open');
+    }
+    function closeLivePreviewModal() {
+      document.getElementById('preview-iframe').src = 'about:blank';
+      document.getElementById('modal-preview').classList.remove('open');
+    }
+    function setPreviewDevice(device) {
+      const wrap = document.getElementById('frame-wrap');
+      document.querySelectorAll('.device-buttons .device-btn').forEach(b => b.classList.remove('active'));
+      if (device === 'mobile') {
+        wrap.style.maxWidth = '375px';
+        document.getElementById('btn-dev-mob').classList.add('active');
+      } else if (device === 'tablet') {
+        wrap.style.maxWidth = '768px';
+        document.getElementById('btn-dev-tab').classList.add('active');
+      } else {
+        wrap.style.maxWidth = '100%';
+        document.getElementById('btn-dev-desk').classList.add('active');
+      }
+    }
+
+    function openRequestsModal() {
+      document.getElementById('modal-requests').classList.add('open');
+    }
+    function closeRequestsModal() {
+      document.getElementById('modal-requests').classList.remove('open');
+    }
+
+    function copyText(text) {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(text);
+        alert('Copied link: ' + text);
+      } else {
+        prompt('Copy link:', text);
       }
     }
 
@@ -616,16 +954,30 @@ export class AdminTelemetry {
       }
     }
 
+    async function modalAddBanRoute() {
+      const input = document.getElementById('modal-input-ban');
+      const val = input.value.trim();
+      if (!val) return;
+      const res = await sendAdminAction('toggle_disable_page', { route: val.startsWith('/') ? val : '/' + val });
+      if (res && res.success) {
+        input.value = '';
+        updateUIState(res.stats);
+      }
+    }
+
     async function toggleResolveFeedback(id) {
       const res = await sendAdminAction('toggle_resolve_feedback', { id });
       if (res && res.success) updateUIState(res.stats);
     }
 
     function updateUIState(data) {
+      currentStats = data;
       const badge = document.getElementById('status-badge');
       const killTitle = document.getElementById('kill-title');
       const killDesc = document.getElementById('kill-desc');
       const killBtn = document.getElementById('btn-kill');
+      const rowKillBtn = document.getElementById('btn-row-kill');
+      const siteStatusBadge = document.getElementById('site-status-badge');
 
       if (data.isPaused) {
         badge.className = 'status-pill paused';
@@ -634,6 +986,13 @@ export class AdminTelemetry {
         killDesc.textContent = 'Visitors are currently blocked with a 503 Maintenance screen. Your local app is completely private.';
         killBtn.className = 'btn-toggle-kill active-paused';
         killBtn.textContent = '▶ Resume Public Access';
+        if (rowKillBtn) {
+          rowKillBtn.className = 'btn-row-kill resume';
+          rowKillBtn.textContent = '▶ Resume';
+        }
+        if (siteStatusBadge) {
+          siteStatusBadge.innerHTML = '<span class="status-badge-paused">🔴 PAUSED (503)</span>';
+        }
       } else {
         badge.className = 'status-pill live';
         badge.textContent = '🟢 LIVE & STREAMING';
@@ -641,12 +1000,29 @@ export class AdminTelemetry {
         killDesc.textContent = 'Anyone with the link can access your website. Click the kill switch to instantly freeze external access.';
         killBtn.className = 'btn-toggle-kill active-live';
         killBtn.textContent = '🛑 KILL SWITCH (Pause Access)';
+        if (rowKillBtn) {
+          rowKillBtn.className = 'btn-row-kill kill';
+          rowKillBtn.textContent = '🛑 Kill Switch';
+        }
+        if (siteStatusBadge) {
+          siteStatusBadge.innerHTML = '<span class="status-badge-live">🟢 LIVE & ONLINE</span>';
+        }
       }
 
       document.getElementById('val-active').textContent = data.activeRequests;
       document.getElementById('val-total').textContent = data.totalRequests;
       document.getElementById('val-visitors').textContent = data.uniqueVisitors;
       document.getElementById('val-latency').textContent = data.avgLatency + ' ms';
+      document.getElementById('site-activity-summary').textContent =
+        data.totalRequests + ' reqs • ' + data.uniqueVisitors + ' visitors • ' + data.avgLatency + 'ms avg';
+
+      // Status breakdown in modal
+      if (document.getElementById('modal-val-2xx')) {
+        document.getElementById('modal-val-2xx').textContent = data.statusCounts['2xx'] || 0;
+        document.getElementById('modal-val-3xx').textContent = data.statusCounts['3xx'] || 0;
+        document.getElementById('modal-val-4xx').textContent = data.statusCounts['4xx'] || 0;
+        document.getElementById('modal-val-5xx').textContent = data.statusCounts['5xx'] || 0;
+      }
 
       // Update Disabled Pages List
       const pagesList = document.getElementById('disabled-pages-list');
@@ -656,9 +1032,48 @@ export class AdminTelemetry {
         pagesList.innerHTML = data.disabledPages.map(page => \`
           <div style="background: #0d1117; border: 1px solid rgba(240,246,252,0.1); padding: 10px 14px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
             <span style="font-family: monospace; color: #f85149; font-weight: 600;">🚫 \${page}</span>
-            <button class="action-btn" onclick="unbanPage('\${page}')" style="color:#3fb950; border-color:#3fb950;">✔ Re-enable Page</button>
+            <button class="action-btn-unban" onclick="unbanPage('\${page}')">✔ Re-enable Page</button>
           </div>
         \`).join('');
+      }
+
+      // Re-render requests modal table if modal is populated
+      const modalTable = document.getElementById('modal-table-traffic');
+      if (modalTable && data.requestGroups) {
+        modalTable.innerHTML = data.requestGroups.map(group => {
+          const isBanned = data.disabledPages.includes(group.url.toLowerCase());
+          return \`
+            <tr class="parent-row" onclick="toggleGroup('\${group.id}')">
+              <td><span class="expand-arrow" id="arrow-\${group.id}">▶</span></td>
+              <td><span class="badge badge-\${group.method.toLowerCase()}">\${group.method}</span></td>
+              <td style="color: #fff;">\${group.url}</td>
+              <td class="status-\${Math.floor(group.status / 100)}xx">\${group.status}</td>
+              <td>\${group.duration}ms</td>
+              <td style="color: #58a6ff;">\${group.subRequests.length} sub-assets</td>
+              <td>\${group.ip}</td>
+              <td>\${new Date(group.timestamp).toLocaleTimeString()}</td>
+              <td>
+                \${isBanned 
+                  ? \`<button class="action-btn-unban" onclick="event.stopPropagation(); unbanPage('\${group.url}')">✅ Enable Page</button>\`
+                  : \`<button class="action-btn-ban" onclick="event.stopPropagation(); banPage('\${group.url}')">🚫 Disable Page</button>\`
+                }
+              </td>
+            </tr>
+            \${group.subRequests.map(sub => \`
+              <tr class="child-row child-of-\${group.id}">
+                <td></td>
+                <td><span style="font-size: 0.7rem; color: #8b949e;">\${sub.method}</span></td>
+                <td>↳ \${sub.url} <span style="font-size: 0.7rem; color: #58a6ff;">(\${sub.type})</span></td>
+                <td class="status-\${Math.floor(sub.status / 100)}xx">\${sub.status}</td>
+                <td>\${sub.duration}ms</td>
+                <td>-</td>
+                <td>-</td>
+                <td>\${new Date(sub.timestamp).toLocaleTimeString()}</td>
+                <td></td>
+              </tr>
+            \`).join('')}
+          \`;
+        }).join('');
       }
     }
 
