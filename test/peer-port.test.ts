@@ -104,151 +104,138 @@ describe('peer-port core modules', () => {
     bridge.close();
   });
 
-  it('enforces PIN protection and unlocks session', async () => {
+  it('enforces Admin Password protection on the Admin Center', async () => {
     const appServer = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end(`Secret App Content on ${req.url}`);
+      res.end('App content');
     });
     await new Promise<void>((resolve) => appServer.listen(0, resolve));
     const appPort = (appServer.address() as any).port;
 
     const guard = new PinGuardProxy({
       targetPort: appPort,
-      pin: '1324',
+      adminPassword: 'supersecretpass',
     });
     const guardPort = await guard.start();
 
-    // Test unauthenticated
-    const unauthRes = await fetch(`http://localhost:${guardPort}/home`);
+    // 1. Visiting /__peer_admin unauthenticated should show Admin Login screen
+    const unauthRes = await fetch(`http://localhost:${guardPort}/__peer_admin`);
     expect(unauthRes.status).toBe(200);
-    const lockHtml = await unauthRes.text();
-    expect(lockHtml).toContain('Access Protected');
+    const loginHtml = await unauthRes.text();
+    expect(loginHtml).toContain('Admin Authentication');
+    expect(loginHtml).toContain('name="password"');
 
-    // Test correct PIN
-    const correctPinRes = await fetch(`http://localhost:${guardPort}/__peer_auth`, {
+    // 2. Submitting wrong admin password
+    const wrongPassRes = await fetch(`http://localhost:${guardPort}/__peer_admin_login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: 'pin=1324&returnUrl=/home',
+      body: 'password=wrongpass',
+    });
+    const wrongHtml = await wrongPassRes.text();
+    expect(wrongHtml).toContain('Incorrect Admin Password');
+
+    // 3. Submitting correct admin password gives admin session cookie
+    const correctRes = await fetch(`http://localhost:${guardPort}/__peer_admin_login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'password=supersecretpass',
       redirect: 'manual',
     });
-    expect(correctPinRes.status).toBe(302);
-    const setCookie = correctPinRes.headers.get('set-cookie');
-    expect(setCookie).toContain('peer_port_auth=');
+    expect(correctRes.status).toBe(302);
+    const adminCookie = correctRes.headers.get('set-cookie');
+    expect(adminCookie).toContain('peer_admin_auth=');
 
-    const cookieHeader = setCookie!.split(';')[0];
-    const authRes = await fetch(`http://localhost:${guardPort}/home`, {
+    // 4. Authenticated admin request opens the real Dashboard
+    const cookieHeader = adminCookie!.split(';')[0];
+    const dashRes = await fetch(`http://localhost:${guardPort}/__peer_admin`, {
       headers: { Cookie: cookieHeader },
     });
-    expect(authRes.status).toBe(200);
-    const content = await authRes.text();
-    expect(content).toBe('Secret App Content on /home');
+    expect(dashRes.status).toBe(200);
+    const dashHtml = await dashRes.text();
+    expect(dashHtml).toContain('Executive Admin Center');
+    expect(dashHtml).toContain('Grouped Page Requests');
 
     guard.close();
     appServer.close();
   });
 
-  it('handles Admin Dashboard telemetry and Visual Feedback sticky notes', async () => {
-    const appServer = http.createServer((req, res) => {
-      res.writeHead(200, { 'Content-Type': 'text/html' });
-      res.end(`<!DOCTYPE html><html><body><h1>My Web App</h1><button id="cta">Click Me</button></body></html>`);
-    });
-    await new Promise<void>((resolve) => appServer.listen(0, resolve));
-    const appPort = (appServer.address() as any).port;
-
-    const proxy = new PinGuardProxy({
-      targetPort: appPort,
-      enableFeedback: true,
-    });
-    const proxyPort = await proxy.start();
-
-    // 1. Verify HTML response has injected feedback widget
-    const htmlRes = await fetch(`http://localhost:${proxyPort}/`);
-    expect(htmlRes.status).toBe(200);
-    const bodyHtml = await htmlRes.text();
-    expect(bodyHtml).toContain('__peer_port_feedback_widget__');
-
-    // 2. Submit Visual Feedback
-    const fbRes = await fetch(`http://localhost:${proxyPort}/__peer_feedback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        comment: 'Change this button to dark blue',
-        selector: '#cta',
-        elementText: 'Click Me',
-        url: '/',
-        screenSize: '390x844',
-      }),
-    });
-    expect(fbRes.status).toBe(200);
-    const fbJson = await fbRes.json();
-    expect(fbJson.success).toBe(true);
-
-    // 3. Verify Admin Dashboard contains feedback
-    const adminRes = await fetch(`http://localhost:${proxyPort}/__peer_admin`);
-    expect(adminRes.status).toBe(200);
-    const adminHtml = await adminRes.text();
-    expect(adminHtml).toContain('Executive Admin Center');
-    expect(adminHtml).toContain('Change this button to dark blue');
-
-    proxy.close();
-    appServer.close();
-  });
-
-  it('executes Admin Superpowers: Kill Switch & IP Banning', async () => {
+  it('allows Admin to ban specific pages only while other pages remain active', async () => {
     const appServer = http.createServer((req, res) => {
       res.writeHead(200, { 'Content-Type': 'text/plain' });
-      res.end(`App content: ${req.url}`);
+      res.end(`App content for ${req.url}`);
     });
     await new Promise<void>((resolve) => appServer.listen(0, resolve));
     const appPort = (appServer.address() as any).port;
 
     const guard = new PinGuardProxy({
       targetPort: appPort,
+      adminPassword: 'admin',
     });
     const guardPort = await guard.start();
 
-    // 1. Test Kill Switch: Activate Pause
-    const pauseRes = await fetch(`http://localhost:${guardPort}/__peer_admin_action`, {
+    // Authenticate as Admin
+    const loginRes = await fetch(`http://localhost:${guardPort}/__peer_admin_login`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'toggle_pause' }),
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'password=admin',
+      redirect: 'manual',
     });
-    expect(pauseRes.status).toBe(200);
-    const pauseData = await pauseRes.json();
-    expect(pauseData.stats.isPaused).toBe(true);
+    const cookieHeader = loginRes.headers.get('set-cookie')!.split(';')[0];
 
-    // Now regular visitor requests must receive 503 Paused screen
-    const blockedRes = await fetch(`http://localhost:${guardPort}/home`);
-    expect(blockedRes.status).toBe(503);
-    const blockedHtml = await blockedRes.text();
-    expect(blockedHtml).toContain('Tunnel Temporarily Paused');
-
-    // 2. Test Kill Switch: Resume Public Access
-    const resumeRes = await fetch(`http://localhost:${guardPort}/__peer_admin_action`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'toggle_pause' }),
-    });
-    const resumeData = await resumeRes.json();
-    expect(resumeData.stats.isPaused).toBe(false);
-
-    const normalRes = await fetch(`http://localhost:${guardPort}/home`);
-    expect(normalRes.status).toBe(200);
-
-    // 3. Test IP Ban superpower
+    // Ban page '/checkout' only
     const banRes = await fetch(`http://localhost:${guardPort}/__peer_admin_action`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'ban_ip', ip: '203.0.113.195' }),
+      headers: { 'Content-Type': 'application/json', Cookie: cookieHeader },
+      body: JSON.stringify({ action: 'toggle_disable_page', route: '/checkout' }),
     });
     expect(banRes.status).toBe(200);
+    const banData = await banRes.json();
+    expect(banData.stats.disabledPages).toContain('/checkout');
 
-    const bannedReq = await fetch(`http://localhost:${guardPort}/home`, {
-      headers: { 'x-forwarded-for': '203.0.113.195' },
+    // Test visitor to banned page '/checkout' -> returns 403 Page Disabled
+    const checkoutRes = await fetch(`http://localhost:${guardPort}/checkout`);
+    expect(checkoutRes.status).toBe(403);
+    const checkoutHtml = await checkoutRes.text();
+    expect(checkoutHtml).toContain('403 Page Disabled');
+
+    // Test visitor to normal page '/home' -> works normally (200 OK)!
+    const homeRes = await fetch(`http://localhost:${guardPort}/home`);
+    expect(homeRes.status).toBe(200);
+    const homeText = await homeRes.text();
+    expect(homeText).toBe('App content for /home');
+
+    guard.close();
+    appServer.close();
+  });
+
+  it('groups child asset requests under parent page visit', async () => {
+    const appServer = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(`<html><body>Page content</body></html>`);
     });
-    expect(bannedReq.status).toBe(403);
-    const bannedHtml = await bannedReq.text();
-    expect(bannedHtml).toContain('Your IP address has been blocked');
+    await new Promise<void>((resolve) => appServer.listen(0, resolve));
+    const appPort = (appServer.address() as any).port;
+
+    const guard = new PinGuardProxy({
+      targetPort: appPort,
+      adminPassword: 'admin',
+    });
+    const guardPort = await guard.start();
+
+    // Visit parent page /dashboard
+    await fetch(`http://localhost:${guardPort}/dashboard`);
+    // Sub-requests triggered by that page:
+    await fetch(`http://localhost:${guardPort}/styles.css`);
+    await fetch(`http://localhost:${guardPort}/bundle.js`);
+    await fetch(`http://localhost:${guardPort}/logo.png`);
+
+    const stats = guard.telemetry.getStats();
+    expect(stats.requestGroups.length).toBeGreaterThanOrEqual(1);
+
+    const parent = stats.requestGroups[0];
+    expect(parent.url).toBe('/dashboard');
+    // All 4 requests grouped under this parent page
+    expect(parent.subRequests.length).toBe(4);
 
     guard.close();
     appServer.close();

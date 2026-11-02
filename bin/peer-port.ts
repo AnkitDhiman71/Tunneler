@@ -10,12 +10,13 @@ const program = new Command();
 
 program
   .name('peer-port')
-  .description('Instant Global Public Tunneling CLI - share localhost with automatic routing, admin telemetry, and visual sticky-notes')
+  .description('Instant Global Public Tunneling CLI - share localhost with automatic routing, password-protected admin telemetry, and visual sticky-notes')
   .version('1.0.0')
   .argument('[port]', 'Local port to expose (e.g. 3000, 5000)', '3000')
   .option('-p, --port <number>', 'Local target port', '3000')
   .option('-h, --host <host>', 'Local target host', 'localhost')
-  .option('--pin <password>', 'Protect public link with a required PIN or password (e.g. --pin 1324)')
+  .option('--admin-pass <password>', 'Custom password to access the /__peer_admin dashboard')
+  .option('--pin <password>', 'Optional password/PIN required for visitors to view your website')
   .option('--no-feedback', 'Disable the floating visual sticky-note feedback widget')
   .option('--p2p', 'Use direct WebRTC DataChannel P2P mode')
   .option('--no-qr', 'Disable terminal QR code rendering')
@@ -46,6 +47,7 @@ program
         const tunnel = await startGlobalTunnel({
           targetPort: port,
           targetHost: options.host,
+          adminPassword: options.adminPass,
           pin: options.pin ? String(options.pin) : undefined,
           enableFeedback: options.feedback,
           noQr: !options.qr,

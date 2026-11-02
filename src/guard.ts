@@ -10,7 +10,7 @@ export interface PinGuardOptions {
   targetPort: number;
   targetHost?: string;
   pin?: string;
-  adminKey?: string;
+  adminPassword?: string;
   enableFeedback?: boolean;
 }
 
@@ -18,8 +18,8 @@ export class PinGuardProxy {
   private targetPort: number;
   private targetHost: string;
   public pin?: string;
-  public adminKey?: string;
   private authToken: string;
+  private adminAuthToken: string;
   public enableFeedback: boolean;
   public telemetry: AdminTelemetry;
   public server: http.Server;
@@ -29,48 +29,84 @@ export class PinGuardProxy {
     this.targetPort = options.targetPort;
     this.targetHost = options.targetHost || 'localhost';
     this.pin = options.pin ? String(options.pin).trim() : undefined;
-    this.adminKey = options.adminKey;
     this.enableFeedback = options.enableFeedback !== false;
-    this.telemetry = new AdminTelemetry(this.pin, this.adminKey);
+    this.telemetry = new AdminTelemetry(options.adminPassword);
     this.authToken = crypto.randomBytes(24).toString('hex');
+    this.adminAuthToken = crypto.randomBytes(24).toString('hex');
 
     this.server = http.createServer((req, res) => this.handleRequest(req, res));
     this.setupWebSocketUpgrade();
   }
 
-  private isAuthorized(req: http.IncomingMessage): boolean {
+  private isVisitorAuthorized(req: http.IncomingMessage): boolean {
     if (!this.pin) return true;
     const cookies = req.headers.cookie || '';
     return cookies.includes(`peer_port_auth=${this.authToken}`);
+  }
+
+  private isAdminAuthorized(req: http.IncomingMessage): boolean {
+    const cookies = req.headers.cookie || '';
+    return cookies.includes(`peer_admin_auth=${this.adminAuthToken}`);
   }
 
   private handleRequest(req: http.IncomingMessage, res: http.ServerResponse): void {
     const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
     const clientIp = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
 
-    // 1. Check IP Ban List
-    if (this.telemetry.bannedIps.has(clientIp)) {
-      res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
-      res.end('<h1>403 Forbidden</h1><p>Your IP address has been blocked by the administrator.</p>');
+    // 1. Admin Login POST
+    if (url.pathname === '/__peer_admin_login' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        const params = new URLSearchParams(body);
+        const enteredPassword = (params.get('password') || '').trim();
+
+        if (enteredPassword === this.telemetry.adminPassword) {
+          res.writeHead(302, {
+            'Set-Cookie': `peer_admin_auth=${this.adminAuthToken}; Path=/; HttpOnly; SameSite=Lax`,
+            Location: '/__peer_admin',
+          });
+          res.end();
+        } else {
+          res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+          res.end(this.telemetry.renderAdminLoginHtml('Incorrect Admin Password'));
+        }
+      });
       return;
     }
 
-    // 2. Admin Web Dashboard
+    // 2. Admin Dashboard View (Password Protected)
     if (url.pathname === '/__peer_admin') {
+      if (!this.isAdminAuthorized(req)) {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(this.telemetry.renderAdminLoginHtml());
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(this.telemetry.renderAdminDashboardHtml());
       return;
     }
 
-    // 3. Admin Live Data JSON Route
+    // 3. Admin Live Data JSON Route (Requires Admin Auth)
     if (url.pathname === '/__peer_admin_data') {
+      if (!this.isAdminAuthorized(req)) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(this.telemetry.getStats()));
       return;
     }
 
-    // 4. Admin Superpower Actions (Kill Switch, Ban IP, Change PIN, Throttling)
+    // 4. Admin Action POST Route (Requires Admin Auth)
     if (url.pathname === '/__peer_admin_action' && req.method === 'POST') {
+      if (!this.isAdminAuthorized(req)) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
+
       let body = '';
       req.on('data', (chunk) => (body += chunk));
       req.on('end', () => {
@@ -87,14 +123,21 @@ export class PinGuardProxy {
       return;
     }
 
-    // 5. Emergency Kill Switch Check (If paused, block all non-admin visitor traffic)
+    // 5. Emergency Master Kill Switch Check
     if (this.telemetry.isPaused) {
       res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(this.renderPausedScreen());
       return;
     }
 
-    // 6. Visual Feedback / Sticky-Note POST Route
+    // 6. Route / Page-Level Disabling Check (Admin banned this specific page only)
+    if (this.telemetry.isPageDisabled(url.pathname)) {
+      res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<!DOCTYPE html><html><head><title>403 Page Disabled</title><style>body{background:#0d1117;color:#e6edf3;font-family:sans-serif;padding:3rem;text-align:center;}h1{color:#f85149;}</style></head><body><h1>🚫 403 Page Disabled</h1><p>The page <code>${escapeHtml(url.pathname)}</code> has been disabled by the administrator.</p><a href="/" style="color:#58a6ff;">← Return to Home</a></body></html>`);
+      return;
+    }
+
+    // 7. Visual Feedback POST
     if (url.pathname === '/__peer_feedback' && req.method === 'POST') {
       let body = '';
       req.on('data', (chunk) => (body += chunk));
@@ -123,7 +166,7 @@ export class PinGuardProxy {
       return;
     }
 
-    // 7. PIN Verification POST Route
+    // 8. Public Link PIN Verification (If PIN was configured)
     if (url.pathname === '/__peer_auth' && req.method === 'POST') {
       let body = '';
       req.on('data', (chunk) => (body += chunk));
@@ -147,14 +190,14 @@ export class PinGuardProxy {
       return;
     }
 
-    // 8. PIN Check: If unauthenticated, show Lockscreen
-    if (!this.isAuthorized(req)) {
+    // 9. Check Visitor Auth (if PIN enabled)
+    if (!this.isVisitorAuthorized(req)) {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(this.renderLockscreen(url.pathname + url.search));
       return;
     }
 
-    // 9. Authorized: Forward to Target App
+    // 10. Forward to Target App
     this.forwardToTarget(req, res, clientIp);
   }
 
@@ -169,26 +212,15 @@ export class PinGuardProxy {
             : pc.bold(pc.green('\n  ▶ [KILL SWITCH DEACTIVATED] Public tunnel access has RESUMED!'))
         );
         break;
-      case 'ban_ip':
-        if (payload.ip) {
-          this.telemetry.bannedIps.add(payload.ip);
-          console.log(pc.red(`  🚫 [IP BANNED] Blocked IP: ${payload.ip}`));
+      case 'toggle_disable_page':
+        if (payload.route) {
+          const isBanned = this.telemetry.toggleDisablePage(payload.route);
+          console.log(
+            isBanned
+              ? pc.red(`  🚫 [PAGE DISABLED] Blocked route: ${payload.route}`)
+              : pc.green(`  ✔ [PAGE RE-ENABLED] Restored route: ${payload.route}`)
+          );
         }
-        break;
-      case 'unban_ip':
-        if (payload.ip) {
-          this.telemetry.bannedIps.delete(payload.ip);
-          console.log(pc.green(`  ✔ [IP UNBANNED] Restored IP: ${payload.ip}`));
-        }
-        break;
-      case 'set_pin':
-        this.pin = payload.pin ? String(payload.pin).trim() : undefined;
-        this.telemetry.currentPin = this.pin;
-        console.log(pc.yellow(`  🔒 [PIN UPDATED] New PIN: ${this.pin || 'None (Open access)'}`));
-        break;
-      case 'set_delay':
-        this.telemetry.simulatedDelayMs = Math.max(0, parseInt(payload.delay, 10) || 0);
-        console.log(pc.cyan(`  ⏱️ [LATENCY UPDATED] Simulated delay: ${this.telemetry.simulatedDelayMs}ms`));
         break;
       case 'toggle_resolve_feedback':
         const fb = this.telemetry.feedbacks.find((f) => f.id === payload.id);
@@ -197,18 +229,13 @@ export class PinGuardProxy {
     }
   }
 
-  private async forwardToTarget(req: http.IncomingMessage, res: http.ServerResponse, clientIp: string): Promise<void> {
+  private forwardToTarget(req: http.IncomingMessage, res: http.ServerResponse, clientIp: string): void {
     const startTime = Date.now();
     this.telemetry.recordRequestStart();
 
-    // Apply simulated latency if enabled in admin controls
-    if (this.telemetry.simulatedDelayMs > 0) {
-      await new Promise((r) => setTimeout(r, this.telemetry.simulatedDelayMs));
-    }
-
     const headers = { ...req.headers };
     headers['host'] = `${this.targetHost}:${this.targetPort}`;
-    delete headers['accept-encoding']; // Keep uncompressed so we can inject feedback badge
+    delete headers['accept-encoding'];
 
     const options: http.RequestOptions = {
       hostname: this.targetHost,
@@ -244,39 +271,37 @@ export class PinGuardProxy {
           res.writeHead(proxyRes.statusCode || 200, resHeaders);
           res.end(modifiedBuffer);
 
-          this.finishRequest(req.method || 'GET', req.url || '/', proxyRes.statusCode || 200, startTime, clientIp);
+          this.finishRequest(req.method || 'GET', req.url || '/', proxyRes.statusCode || 200, startTime, clientIp, req.headers);
         });
       } else {
         res.writeHead(proxyRes.statusCode || 200, proxyRes.headers);
         proxyRes.pipe(res);
 
         proxyRes.on('end', () => {
-          this.finishRequest(req.method || 'GET', req.url || '/', proxyRes.statusCode || 200, startTime, clientIp);
+          this.finishRequest(req.method || 'GET', req.url || '/', proxyRes.statusCode || 200, startTime, clientIp, req.headers);
         });
       }
     });
 
-    proxyReq.on('error', (err) => {
+    proxyReq.on('error', () => {
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
       res.end(`<!DOCTYPE html><html><head><title>peer-port Cloud Server</title><style>body{background:#0d1117;color:#e6edf3;font-family:sans-serif;padding:3rem 1.5rem;text-align:center;}.card{max-width:480px;margin:0 auto;background:#161b22;padding:2rem;border-radius:12px;border:1px solid rgba(240,246,252,0.1);}.btn{display:inline-block;margin-top:1.2rem;padding:10px 20px;background:#238636;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;}</style></head><body><div class="card"><h1>⚡ peer-port Cloud Node</h1><p style="color:#8b949e;margin-top:8px;">Server is live and ready on Render.</p><a class="btn" href="/__peer_admin">Open Executive Admin Center →</a></div></body></html>`);
-      this.finishRequest(req.method || 'GET', req.url || '/', 200, startTime, clientIp);
+      this.finishRequest(req.method || 'GET', req.url || '/', 200, startTime, clientIp, req.headers);
     });
 
     req.pipe(proxyReq);
   }
 
-  private finishRequest(method: string, url: string, status: number, startTime: number, ip: string): void {
+  private finishRequest(
+    method: string,
+    url: string,
+    status: number,
+    startTime: number,
+    ip: string,
+    headers: Record<string, any>
+  ): void {
     const duration = Date.now() - startTime;
-    this.telemetry.recordRequestEnd({
-      id: Math.random().toString(36).substring(2, 9),
-      method,
-      url,
-      status,
-      duration,
-      ip,
-      timestamp: Date.now(),
-      headers: {},
-    });
+    this.telemetry.recordRequestEnd(method, url, status, duration, ip, headers);
   }
 
   private logFeedbackToTerminal(f: FeedbackItem): void {
@@ -288,7 +313,7 @@ export class PinGuardProxy {
 
   private setupWebSocketUpgrade(): void {
     this.server.on('upgrade', (req, socket, head) => {
-      if (!this.isAuthorized(req) || this.telemetry.isPaused) {
+      if (!this.isVisitorAuthorized(req) || this.telemetry.isPaused) {
         socket.destroy();
         return;
       }
