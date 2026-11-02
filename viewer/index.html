@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>peer-port — P2P WebRTC Localhost Tunnel</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: rgba(22, 27, 34, 0.85);
+      --border: rgba(240, 246, 252, 0.1);
+      --text: #e6edf3;
+      --text-muted: #8b949e;
+      --primary: #58a6ff;
+      --success: #3fb950;
+      --warning: #d29922;
+      --danger: #f85149;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    body {
+      background: radial-gradient(circle at 50% 0%, #161b22, #0d1117 75%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-weight: 700;
+      font-size: 1.25rem;
+      letter-spacing: -0.5px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.35rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 500;
+      border: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--warning);
+      animation: pulse 1.5s infinite;
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.4; }
+      50% { opacity: 1; }
+      100% { opacity: 0.4; }
+    }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      padding: 1.5rem;
+      gap: 1.2rem;
+      max-width: 1200px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 1rem 1.25rem;
+      border-radius: 12px;
+      backdrop-filter: blur(8px);
+    }
+
+    .stat-title {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      margin-top: 0.25rem;
+      color: var(--primary);
+    }
+
+    .app-frame-container {
+      flex: 1;
+      min-height: 480px;
+      background: #000;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .frame-bar {
+      background: #161b22;
+      padding: 0.5rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .url-input {
+      flex: 1;
+      background: #0d1117;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    .btn {
+      background: var(--primary);
+      color: #0d1117;
+      border: none;
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: opacity 0.2s;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+
+    iframe {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: #fff;
+    }
+
+    .logs-container {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      max-height: 180px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 0.85rem;
+    }
+
+    .log-item {
+      padding: 0.25rem 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      justify-content: space-between;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <span>⚡ peer-port</span>
+      <span style="font-size: 0.85rem; color: var(--text-muted); font-weight: normal;">P2P WebRTC Tunnel</span>
+    </div>
+    <div class="badge" id="status-badge">
+      <div class="status-dot" id="status-dot"></div>
+      <span id="status-text">Connecting to Host...</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-title">Connection Mode</div>
+        <div class="stat-value" id="mode-val">WebRTC P2P</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">Tunnel Latency</div>
+        <div class="stat-value" id="latency-val">-- ms</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-title">Requests Proxied</div>
+        <div class="stat-value" id="requests-val">0</div>
+      </div>
+    </div>
+
+    <div class="app-frame-container">
+      <div class="frame-bar">
+        <input type="text" id="url-bar" class="url-input" value="/" placeholder="Enter path e.g. / or /api/users" />
+        <button class="btn" id="reload-btn">Reload</button>
+        <button class="btn" id="open-tab-btn" style="background: rgba(255,255,255,0.1); color: var(--text);">Open In Tab</button>
+      </div>
+      <iframe id="app-iframe" src="about:blank"></iframe>
+    </div>
+
+    <div class="logs-container" id="logs">
+      <div class="log-item" style="color: var(--text-muted);">
+        <span>Initializing WebRTC signaling bridge...</span>
+        <span>00:00:00</span>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    let peerConnection = null;
+    let dataChannel = null;
+    let reqCount = 0;
+    const chunkBuffers = new Map();
+    const pendingResolvers = new Map();
+
+    const statusDot = document.getElementById('status-dot');
+    const statusText = document.getElementById('status-text');
+    const latencyVal = document.getElementById('latency-val');
+    const requestsVal = document.getElementById('requests-val');
+    const logsEl = document.getElementById('logs');
+    const iframe = document.getElementById('app-iframe');
+    const urlBar = document.getElementById('url-bar');
+
+    function log(msg, color) {
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = 'log-item';
+      div.style.color = color || 'inherit';
+      div.innerHTML = `<span>${msg}</span><span>${time}</span>`;
+      logsEl.prepend(div);
+    }
+
+    // Register Service Worker
+    async function initServiceWorker() {
+      if ('serviceWorker' in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.register('/sw.js');
+          log('✔ Service Worker registered for request interception', '#3fb950');
+
+          navigator.serviceWorker.addEventListener('message', (event) => {
+            const data = event.data;
+            if (data && data.type === 'send-peer-request') {
+              forwardRequestOverDataChannel(data.payload);
+            }
+          });
+        } catch (err) {
+          log('⚠ Service Worker register failed: ' + err.message, '#d29922');
+        }
+      }
+    }
+
+    // Connect to WebRTC Signaling via WebSocket
+    async function connectSignaling() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        log('✔ Connected to signaling channel. Waiting for SDP Offer...', '#58a6ff');
+      };
+
+      ws.onmessage = async (event) => {
+        const msg = JSON.parse(event.data);
+
+        if (msg.type === 'offer') {
+          log('📥 Received SDP Offer. Creating WebRTC PeerConnection...', '#58a6ff');
+          await setupWebRTC(msg.sdp, ws);
+        } else if (msg.type === 'handshake-success') {
+          log('✔ Signaling handshake completed successfully!', '#3fb950');
+        }
+      };
+
+      ws.onerror = (err) => {
+        log('❌ Signaling connection error', '#f85149');
+      };
+    }
+
+    async function setupWebRTC(offerSdp, ws) {
+      peerConnection = new RTCPeerConnection({
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      });
+
+      peerConnection.onconnectionstatechange = () => {
+        const state = peerConnection.connectionState;
+        if (state === 'connected') {
+          statusDot.classList.add('connected');
+          statusText.textContent = 'P2P Connected (WebRTC)';
+          log('🎉 Direct Peer-to-Peer connection established!', '#3fb950');
+          startPingLoop();
+          loadIframe();
+        } else {
+          statusDot.classList.remove('connected');
+          statusText.textContent = state;
+        }
+      };
+
+      peerConnection.ondatachannel = (event) => {
+        attachDataChannel(event.channel);
+      };
+
+      // Set Remote Description (Offer)
+      const offerDesc = typeof offerSdp === 'string' ? JSON.parse(offerSdp) : offerSdp;
+      await peerConnection.setRemoteDescription(offerDesc);
+
+      // Create Answer
+      const answer = await peerConnection.createAnswer();
+      await peerConnection.setLocalDescription(answer);
+
+      // Wait for ICE gathering
+      if (peerConnection.iceGatheringState !== 'complete') {
+        await new Promise((resolve) => {
+          const check = () => {
+            if (peerConnection.iceGatheringState === 'complete') resolve();
+          };
+          peerConnection.onicegatheringstatechange = check;
+          setTimeout(resolve, 2000);
+        });
+      }
+
+      // Send Answer back over signaling WebSocket
+      ws.send(JSON.stringify({
+        type: 'answer',
+        sdp: JSON.stringify(peerConnection.localDescription)
+      }));
+    }
+
+    function attachDataChannel(channel) {
+      dataChannel = channel;
+
+      channel.onopen = () => {
+        log('✔ WebRTC DataChannel open and active!', '#3fb950');
+      };
+
+      channel.onmessage = (event) => {
+        handleIncomingDataChannelMessage(event.data);
+      };
+    }
+
+    function forwardRequestOverDataChannel(reqPayload) {
+      if (!dataChannel || dataChannel.readyState !== 'open') {
+        log('❌ DataChannel not ready to forward ' + reqPayload.url, '#f85149');
+        return;
+      }
+      reqCount++;
+      requestsVal.textContent = reqCount;
+      log(`⇄ [${reqPayload.method}] ${reqPayload.url}`);
+      dataChannel.send(JSON.stringify(reqPayload));
+    }
+
+    function handleIncomingDataChannelMessage(raw) {
+      const data = JSON.parse(raw);
+
+      if (data.type === 'pong') {
+        const latency = Date.now() - data.timestamp;
+        latencyVal.textContent = `${latency} ms`;
+        return;
+      }
+
+      if (data.type === 'response') {
+        dispatchResponseToWorker(data);
+      } else if (data.type === 'response-header') {
+        chunkBuffers.set(data.id, {
+          header: data,
+          chunks: []
+        });
+      } else if (data.type === 'chunk') {
+        const entry = chunkBuffers.get(data.id);
+        if (entry) {
+          entry.chunks.push(data.data);
+          if (data.isLast) {
+            chunkBuffers.delete(data.id);
+            const fullBase64 = entry.chunks.join('');
+            dispatchResponseToWorker({
+              type: 'response',
+              id: data.id,
+              statusCode: entry.header.statusCode,
+              statusMessage: entry.header.statusMessage,
+              headers: entry.header.headers,
+              body: fullBase64,
+              isBase64: true
+            });
+          }
+        }
+      }
+    }
+
+    function dispatchResponseToWorker(resPayload) {
+      if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'peer-response',
+          ...resPayload
+        });
+      }
+    }
+
+    function startPingLoop() {
+      setInterval(() => {
+        if (dataChannel && dataChannel.readyState === 'open') {
+          dataChannel.send(JSON.stringify({ type: 'ping', timestamp: Date.now() }));
+        }
+      }, 3000);
+    }
+
+    function loadIframe() {
+      const path = urlBar.value.trim() || '/';
+      iframe.src = path;
+    }
+
+    document.getElementById('reload-btn').addEventListener('click', () => {
+      loadIframe();
+    });
+
+    document.getElementById('open-tab-btn').addEventListener('click', () => {
+      window.open(urlBar.value.trim() || '/', '_blank');
+    });
+
+    urlBar.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') loadIframe();
+    });
+
+    initServiceWorker();
+    connectSignaling();
+  </script>
+</body>
+</html>
+

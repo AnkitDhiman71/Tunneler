@@ -1,0 +1,9 @@
+src/
+bin/
+test/
+*.ts
+tsconfig.json
+tsup.config.ts
+.gitignore
+*.log
+

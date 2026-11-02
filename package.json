@@ -1,0 +1,51 @@
+{
+  "name": "peer-port",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Instant Global Public Tunneling CLI - share localhost to anyone in the world with automatic routing",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "peer-port": "./dist/peer-port.js"
+  },
+  "files": [
+    "dist",
+    "viewer"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "start": "node dist/peer-port.js"
+  },
+  "keywords": [
+    "webrtc",
+    "p2p",
+    "tunnel",
+    "localhost",
+    "ngrok-alternative",
+    "port-forwarding",
+    "developer-tools",
+    "mern",
+    "datachannel"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "commander": "^14.0.3",
+    "picocolors": "^1.1.1",
+    "qrcode-terminal": "^0.12.0",
+    "untun": "^0.2.2",
+    "werift": "^0.5.4",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.11.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "@types/ws": "^8.18.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.7.3",
+    "vitest": "^4.0.8"
+  }
+}
