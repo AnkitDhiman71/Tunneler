@@ -1,3 +1,5 @@
+import process from 'node:process';
+
 export interface FeedbackItem {
   id: string;
   comment: string;
@@ -51,8 +53,8 @@ export class AdminTelemetry {
   };
 
   constructor(adminPassword?: string) {
-    // Generate or use provided admin password
-    this.adminPassword = adminPassword || 'admin' + Math.floor(1000 + Math.random() * 9000);
+    // Use provided admin password, env variable, or default to user preference
+    this.adminPassword = adminPassword || process.env.ADMIN_PASSWORD || 'admin_Ankit@1320';
   }
 
   public getAssetType(url: string, headers: Record<string, any>): string {
