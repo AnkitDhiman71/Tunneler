@@ -1,4 +1,5 @@
 import http from 'node:http';
+import process from 'node:process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';

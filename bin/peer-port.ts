@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import process from 'node:process';
 import { Command } from 'commander';
 import { startGlobalTunnel } from '../src/tunnel.js';
 import { startPeerTunnel } from '../src/p2p.js';
