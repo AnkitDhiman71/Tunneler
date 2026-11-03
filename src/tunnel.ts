@@ -1,6 +1,7 @@
 import { printQrCode } from './qrcode.js';
 import { getLocalIpAddress } from './network.js';
 import { PinGuardProxy } from './guard.js';
+import { printAdBanner } from './banner.js';
 import pc from 'picocolors';
 
 export interface GlobalTunnelOptions {
@@ -28,7 +29,7 @@ export async function startGlobalTunnel(options: GlobalTunnelOptions): Promise<G
   const lanIp = getLocalIpAddress();
   const lanUrl = `http://${lanIp}:${targetPort}`;
 
-  console.log('\n' + pc.bold(pc.cyan('⚡ peer-port — Instant Global Public Tunnel & QA Suite')) + '\n');
+  printAdBanner();
   console.log(`  🎯 Local App:        ${pc.green(`http://${targetHost}:${targetPort}`)}`);
   console.log(`  📶 Local LAN:        ${pc.dim(lanUrl)}`);
 

@@ -1,6 +1,6 @@
 {
   "name": "peer-port",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "type": "module",
   "description": "Instant Global Public Tunneling CLI - share localhost to anyone in the world with automatic routing",
   "main": "./dist/index.cjs",

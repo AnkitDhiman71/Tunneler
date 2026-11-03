@@ -1922,16 +1922,24 @@ function escapeHtml2(str) {
   });
 }
 
-// src/tunnel.ts
+// src/banner.ts
 var import_picocolors2 = __toESM(require("picocolors"), 1);
+function printAdBanner(mode) {
+  console.log(
+    "\n  " + import_picocolors2.default.cyan(import_picocolors2.default.bold("\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 ")) + "\n  " + import_picocolors2.default.cyan(import_picocolors2.default.bold("\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557")) + "   " + import_picocolors2.default.white(import_picocolors2.default.bold("\u26A1 peer-port")) + " " + import_picocolors2.default.cyan("v1.0.5") + (mode ? " " + import_picocolors2.default.yellow(`(${mode})`) : "") + "\n  " + import_picocolors2.default.cyan(import_picocolors2.default.bold("\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551")) + "   " + import_picocolors2.default.magenta("Crafted with \u2764\uFE0F  by Ankit Dhiman") + "\n  " + import_picocolors2.default.cyan(import_picocolors2.default.bold("\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551")) + "   " + import_picocolors2.default.dim("Instant Global Public Tunnel & QA Suite") + "\n  " + import_picocolors2.default.cyan(import_picocolors2.default.bold("\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D")) + "\n  " + import_picocolors2.default.cyan(import_picocolors2.default.bold("\u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u255D ")) + "\n"
+  );
+}
+
+// src/tunnel.ts
+var import_picocolors3 = __toESM(require("picocolors"), 1);
 async function startGlobalTunnel(options) {
   const targetPort = options.targetPort;
   const targetHost = options.targetHost || "localhost";
   const lanIp = getLocalIpAddress();
   const lanUrl = `http://${lanIp}:${targetPort}`;
-  console.log("\n" + import_picocolors2.default.bold(import_picocolors2.default.cyan("\u26A1 peer-port \u2014 Instant Global Public Tunnel & QA Suite")) + "\n");
-  console.log(`  \u{1F3AF} Local App:        ${import_picocolors2.default.green(`http://${targetHost}:${targetPort}`)}`);
-  console.log(`  \u{1F4F6} Local LAN:        ${import_picocolors2.default.dim(lanUrl)}`);
+  printAdBanner();
+  console.log(`  \u{1F3AF} Local App:        ${import_picocolors3.default.green(`http://${targetHost}:${targetPort}`)}`);
+  console.log(`  \u{1F4F6} Local LAN:        ${import_picocolors3.default.dim(lanUrl)}`);
   const pinGuard = new PinGuardProxy({
     targetPort,
     targetHost,
@@ -1941,11 +1949,11 @@ async function startGlobalTunnel(options) {
   });
   const tunnelPort = await pinGuard.start();
   if (options.pin) {
-    console.log(`  \u{1F512} Visitor PIN:      ${import_picocolors2.default.bold(import_picocolors2.default.magenta(`ACTIVE (PIN: ${options.pin})`))}`);
+    console.log(`  \u{1F512} Visitor PIN:      ${import_picocolors3.default.bold(import_picocolors3.default.magenta(`ACTIVE (PIN: ${options.pin})`))}`);
   }
-  const feedbackStatus = options.enableFeedback !== false ? import_picocolors2.default.green("ENABLED (Floating badge)") : import_picocolors2.default.dim("Disabled");
+  const feedbackStatus = options.enableFeedback !== false ? import_picocolors3.default.green("ENABLED (Floating badge)") : import_picocolors3.default.dim("Disabled");
   console.log(`  \u{1F4CC} Visual Feedback:  ${feedbackStatus}`);
-  console.log(import_picocolors2.default.yellow("  \u23F3 Generating secure public HTTPS link across the global internet..."));
+  console.log(import_picocolors3.default.yellow("  \u23F3 Generating secure public HTTPS link across the global internet..."));
   const { startTunnel } = await import("untun");
   const tunnel = await startTunnel({
     port: tunnelPort,
@@ -2014,14 +2022,14 @@ async function startGlobalTunnel(options) {
     }
   }
   console.log(`
-  \u{1F310} ${import_picocolors2.default.bold(import_picocolors2.default.green("Public Website Link:"))} ${import_picocolors2.default.underline(import_picocolors2.default.bold(import_picocolors2.default.cyan(publicUrl)))}
+  \u{1F310} ${import_picocolors3.default.bold(import_picocolors3.default.green("Public Website Link:"))} ${import_picocolors3.default.underline(import_picocolors3.default.bold(import_picocolors3.default.cyan(publicUrl)))}
 `);
   if (!options.noQr) {
-    console.log(import_picocolors2.default.dim("  Scan QR with your phone to open instantly:"));
+    console.log(import_picocolors3.default.dim("  Scan QR with your phone to open instantly:"));
     printQrCode(publicUrl);
     console.log("");
   }
-  console.log(import_picocolors2.default.dim("  Press Ctrl+C to stop sharing."));
+  console.log(import_picocolors3.default.dim("  Press Ctrl+C to stop sharing."));
   return {
     targetPort,
     publicUrl,
@@ -2057,7 +2065,7 @@ var import_node_buffer2 = require("buffer");
 var CHUNK_SIZE = 32 * 1024;
 
 // src/proxy.ts
-var import_picocolors3 = __toESM(require("picocolors"), 1);
+var import_picocolors4 = __toESM(require("picocolors"), 1);
 var LocalHttpProxy = class {
   targetPort;
   targetHost;
@@ -2111,7 +2119,7 @@ var LocalHttpProxy = class {
     });
     localReq.on("error", (err) => {
       const duration = Date.now() - startTime;
-      console.error(import_picocolors3.default.red(`\u274C [Proxy Error] ${req.method} ${url}: ${err.message}`));
+      console.error(import_picocolors4.default.red(`\u274C [Proxy Error] ${req.method} ${url}: ${err.message}`));
       const errorBody = import_node_buffer2.Buffer.from(
         `<h1>502 Bad Gateway - peer-port</h1><p>Cannot connect to localhost:${this.targetPort}: ${err.message}</p>`
       );
@@ -2175,18 +2183,18 @@ var LocalHttpProxy = class {
     }
   }
   logTraffic(method, url, status, duration) {
-    let statusColored = import_picocolors3.default.green(String(status));
-    if (status >= 400 && status < 500) statusColored = import_picocolors3.default.yellow(String(status));
-    if (status >= 500) statusColored = import_picocolors3.default.red(String(status));
-    const methodColored = import_picocolors3.default.cyan(method.padEnd(6));
-    const durationColored = import_picocolors3.default.dim(`${duration}ms`);
-    console.log(`  ${import_picocolors3.default.magenta("\u21C4")} ${methodColored} ${import_picocolors3.default.white(url)} \u2192 ${statusColored} ${durationColored}`);
+    let statusColored = import_picocolors4.default.green(String(status));
+    if (status >= 400 && status < 500) statusColored = import_picocolors4.default.yellow(String(status));
+    if (status >= 500) statusColored = import_picocolors4.default.red(String(status));
+    const methodColored = import_picocolors4.default.cyan(method.padEnd(6));
+    const durationColored = import_picocolors4.default.dim(`${duration}ms`);
+    console.log(`  ${import_picocolors4.default.magenta("\u21C4")} ${methodColored} ${import_picocolors4.default.white(url)} \u2192 ${statusColored} ${durationColored}`);
   }
 };
 
 // src/webrtc.ts
 var import_werift = require("werift");
-var import_picocolors4 = __toESM(require("picocolors"), 1);
+var import_picocolors5 = __toESM(require("picocolors"), 1);
 var WebRtcBridge = class {
   pc;
   dataChannel = null;
@@ -2203,10 +2211,10 @@ var WebRtcBridge = class {
   setupPeerEvents() {
     this.pc.connectionStateChange.subscribe((state) => {
       if (state === "connected") {
-        console.log(import_picocolors4.default.green("  \u2714 WebRTC PeerConnection established! Direct P2P tunnel active."));
+        console.log(import_picocolors5.default.green("  \u2714 WebRTC PeerConnection established! Direct P2P tunnel active."));
         if (this.onConnected) this.onConnected();
       } else if (state === "disconnected" || state === "failed" || state === "closed") {
-        console.log(import_picocolors4.default.yellow(`  \u26A0 WebRTC PeerConnection state: ${state}`));
+        console.log(import_picocolors5.default.yellow(`  \u26A0 WebRTC PeerConnection state: ${state}`));
         if (this.onDisconnected) this.onDisconnected();
       }
     });
@@ -2225,9 +2233,9 @@ var WebRtcBridge = class {
     this.dataChannel = channel;
     channel.stateChanged.subscribe((state) => {
       if (state === "open") {
-        console.log(import_picocolors4.default.green("  \u2714 WebRTC DataChannel open! Ready for HTTP traffic."));
+        console.log(import_picocolors5.default.green("  \u2714 WebRTC DataChannel open! Ready for HTTP traffic."));
       } else if (state === "closed") {
-        console.log(import_picocolors4.default.yellow("  \u26A0 WebRTC DataChannel closed."));
+        console.log(import_picocolors5.default.yellow("  \u26A0 WebRTC DataChannel closed."));
       }
     });
     channel.message.subscribe((data) => {
@@ -2240,7 +2248,7 @@ var WebRtcBridge = class {
           channel.send(JSON.stringify({ type: "pong", timestamp: Date.now() }));
         }
       } catch (err) {
-        console.error(import_picocolors4.default.red(`  \u274C Failed to parse incoming WebRTC message: ${err.message}`));
+        console.error(import_picocolors5.default.red(`  \u274C Failed to parse incoming WebRTC message: ${err.message}`));
       }
     });
   }
@@ -2288,7 +2296,7 @@ var import_node_process3 = __toESM(require("process"), 1);
 var import_node_fs2 = __toESM(require("fs"), 1);
 var import_node_path2 = __toESM(require("path"), 1);
 var import_ws = require("ws");
-var import_picocolors5 = __toESM(require("picocolors"), 1);
+var import_picocolors6 = __toESM(require("picocolors"), 1);
 var SignalingServer = class {
   server;
   wss;
@@ -2340,7 +2348,7 @@ var SignalingServer = class {
   }
   setupWebSocket() {
     this.wss.on("connection", async (ws) => {
-      console.log(import_picocolors5.default.cyan("  \u{1F50C} Browser viewer connected for WebRTC handshake..."));
+      console.log(import_picocolors6.default.cyan("  \u{1F50C} Browser viewer connected for WebRTC handshake..."));
       try {
         const offerSdp = await this.bridge.createCompleteOffer();
         ws.send(JSON.stringify({ type: "offer", sdp: offerSdp }));
@@ -2348,16 +2356,16 @@ var SignalingServer = class {
           try {
             const data = JSON.parse(raw.toString());
             if (data.type === "answer") {
-              console.log(import_picocolors5.default.cyan("  \u{1F4E5} Received WebRTC SDP Answer from browser viewer!"));
+              console.log(import_picocolors6.default.cyan("  \u{1F4E5} Received WebRTC SDP Answer from browser viewer!"));
               await this.bridge.handleAnswer(data.sdp);
               ws.send(JSON.stringify({ type: "handshake-success" }));
             }
           } catch (err) {
-            console.error(import_picocolors5.default.red(`  \u274C Failed handling signaling message: ${err.message}`));
+            console.error(import_picocolors6.default.red(`  \u274C Failed handling signaling message: ${err.message}`));
           }
         });
       } catch (err) {
-        console.error(import_picocolors5.default.red(`  \u274C Failed during signaling handshake: ${err.message}`));
+        console.error(import_picocolors6.default.red(`  \u274C Failed during signaling handshake: ${err.message}`));
       }
     });
   }
@@ -2386,7 +2394,7 @@ var SignalingServer = class {
 };
 
 // src/p2p.ts
-var import_picocolors6 = __toESM(require("picocolors"), 1);
+var import_picocolors7 = __toESM(require("picocolors"), 1);
 async function startPeerTunnel(options) {
   const targetPort = options.targetPort;
   const targetHost = options.targetHost || "localhost";
@@ -2405,14 +2413,14 @@ async function startPeerTunnel(options) {
   const lanIp = getLocalIpAddress();
   const localUrl = `http://localhost:${actualSignalingPort}`;
   const lanUrl = `http://${lanIp}:${actualSignalingPort}`;
-  console.log("\n" + import_picocolors6.default.bold(import_picocolors6.default.cyan("\u26A1 peer-port \u2014 P2P WebRTC Direct Tunnel")) + "\n");
-  console.log(`  \u{1F3AF} Target App:      ${import_picocolors6.default.green(`http://${targetHost}:${targetPort}`)}`);
-  console.log(`  \u{1F4BB} Local Viewer:   ${import_picocolors6.default.underline(import_picocolors6.default.cyan(localUrl))}`);
-  console.log(`  \u{1F4F1} Network / Phone: ${import_picocolors6.default.underline(import_picocolors6.default.bold(import_picocolors6.default.yellow(lanUrl)))}`);
+  printAdBanner("P2P WebRTC");
+  console.log(`  \u{1F3AF} Target App:      ${import_picocolors7.default.green(`http://${targetHost}:${targetPort}`)}`);
+  console.log(`  \u{1F4BB} Local Viewer:   ${import_picocolors7.default.underline(import_picocolors7.default.cyan(localUrl))}`);
+  console.log(`  \u{1F4F1} Network / Phone: ${import_picocolors7.default.underline(import_picocolors7.default.bold(import_picocolors7.default.yellow(lanUrl)))}`);
   console.log(`  \u{1F512} Security:        Direct End-to-End P2P WebRTC DataChannel
 `);
   if (!options.noQr) {
-    console.log(import_picocolors6.default.dim("  Scan QR with your phone to open instantly:"));
+    console.log(import_picocolors7.default.dim("  Scan QR with your phone to open instantly:"));
     printQrCode(lanUrl);
     console.log("");
   }
@@ -2429,12 +2437,13 @@ async function startPeerTunnel(options) {
 }
 
 // bin/peer-port.ts
-var import_picocolors7 = __toESM(require("picocolors"), 1);
+var import_picocolors8 = __toESM(require("picocolors"), 1);
 var program = new import_commander.Command();
-program.name("peer-port").description("Instant Global Public Tunneling CLI - share localhost with automatic routing, optional PIN protection, and visual sticky-notes").version("1.0.4").argument("[port]", "Local port to expose (e.g. 3000, 5000)", "3000").option("-p, --port <number>", "Local target port", "3000").option("-h, --host <host>", "Local target host", "localhost").option("--admin-pass <password>", "Custom password to access the /__peer_admin dashboard").option("--pin <password>", "Optional password/PIN required for visitors to view your website").option("--no-feedback", "Disable the floating visual sticky-note feedback widget").option("--p2p", "Use direct WebRTC DataChannel P2P mode").option("--no-qr", "Disable terminal QR code rendering").action(async (portArg, options) => {
-  const port = parseInt(options.port || portArg || "3000", 10);
+program.name("peer-port").description("Instant Global Public Tunneling CLI - share localhost with automatic routing, optional PIN protection, and visual sticky-notes").version("1.0.5").argument("[port]", "Local port to expose (e.g. 3000, 5000)").option("-p, --port <number>", "Local target port").option("-h, --host <host>", "Local target host", "localhost").option("--admin-pass <password>", "Custom password to access the /__peer_admin dashboard").option("--pin <password>", "Optional password/PIN required for visitors to view your website").option("--no-feedback", "Disable the floating visual sticky-note feedback widget").option("--p2p", "Use direct WebRTC DataChannel P2P mode").option("--no-qr", "Disable terminal QR code rendering").action(async (portArg, options) => {
+  const rawPort = portArg || options.port || "3000";
+  const port = parseInt(rawPort, 10);
   if (isNaN(port) || port <= 0 || port > 65535) {
-    console.error(import_picocolors7.default.red(`\u274C Invalid port number: ${portArg}`));
+    console.error(import_picocolors8.default.red(`\u274C Invalid port number: ${portArg}`));
     import_node_process4.default.exit(1);
   }
   try {
@@ -2445,7 +2454,7 @@ program.name("peer-port").description("Instant Global Public Tunneling CLI - sha
         noQr: !options.qr
       });
       const cleanup = () => {
-        console.log("\n" + import_picocolors7.default.yellow("\u{1F44B} Closing peer-port tunnel..."));
+        console.log("\n" + import_picocolors8.default.yellow("\u{1F44B} Closing peer-port tunnel..."));
         tunnel.close();
         import_node_process4.default.exit(0);
       };
@@ -2461,7 +2470,7 @@ program.name("peer-port").description("Instant Global Public Tunneling CLI - sha
         noQr: !options.qr
       });
       const cleanup = async () => {
-        console.log("\n" + import_picocolors7.default.yellow("\u{1F44B} Closing peer-port tunnel..."));
+        console.log("\n" + import_picocolors8.default.yellow("\u{1F44B} Closing peer-port tunnel..."));
         await tunnel.close();
         import_node_process4.default.exit(0);
       };
@@ -2469,7 +2478,7 @@ program.name("peer-port").description("Instant Global Public Tunneling CLI - sha
       import_node_process4.default.on("SIGTERM", cleanup);
     }
   } catch (err) {
-    console.error(import_picocolors7.default.red(`
+    console.error(import_picocolors8.default.red(`
 \u274C Failed to start tunnel: ${err.message}`));
     import_node_process4.default.exit(1);
   }

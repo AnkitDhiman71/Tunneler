@@ -11,9 +11,9 @@ const program = new Command();
 program
   .name('peer-port')
   .description('Instant Global Public Tunneling CLI - share localhost with automatic routing, optional PIN protection, and visual sticky-notes')
-  .version('1.0.4')
-  .argument('[port]', 'Local port to expose (e.g. 3000, 5000)', '3000')
-  .option('-p, --port <number>', 'Local target port', '3000')
+  .version('1.0.5')
+  .argument('[port]', 'Local port to expose (e.g. 3000, 5000)')
+  .option('-p, --port <number>', 'Local target port')
   .option('-h, --host <host>', 'Local target host', 'localhost')
   .option('--admin-pass <password>', 'Custom password to access the /__peer_admin dashboard')
   .option('--pin <password>', 'Optional password/PIN required for visitors to view your website')
@@ -21,7 +21,8 @@ program
   .option('--p2p', 'Use direct WebRTC DataChannel P2P mode')
   .option('--no-qr', 'Disable terminal QR code rendering')
   .action(async (portArg, options) => {
-    const port = parseInt(options.port || portArg || '3000', 10);
+    const rawPort = portArg || options.port || '3000';
+    const port = parseInt(rawPort, 10);
 
     if (isNaN(port) || port <= 0 || port > 65535) {
       console.error(pc.red(`❌ Invalid port number: ${portArg}`));

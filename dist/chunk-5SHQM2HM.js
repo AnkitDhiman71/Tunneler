@@ -1893,16 +1893,24 @@ function escapeHtml2(str) {
   });
 }
 
-// src/tunnel.ts
+// src/banner.ts
 import pc2 from "picocolors";
+function printAdBanner(mode) {
+  console.log(
+    "\n  " + pc2.cyan(pc2.bold("\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 ")) + "\n  " + pc2.cyan(pc2.bold("\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557")) + "   " + pc2.white(pc2.bold("\u26A1 peer-port")) + " " + pc2.cyan("v1.0.5") + (mode ? " " + pc2.yellow(`(${mode})`) : "") + "\n  " + pc2.cyan(pc2.bold("\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551")) + "   " + pc2.magenta("Crafted with \u2764\uFE0F  by Ankit Dhiman") + "\n  " + pc2.cyan(pc2.bold("\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551")) + "   " + pc2.dim("Instant Global Public Tunnel & QA Suite") + "\n  " + pc2.cyan(pc2.bold("\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D")) + "\n  " + pc2.cyan(pc2.bold("\u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u255D ")) + "\n"
+  );
+}
+
+// src/tunnel.ts
+import pc3 from "picocolors";
 async function startGlobalTunnel(options) {
   const targetPort = options.targetPort;
   const targetHost = options.targetHost || "localhost";
   const lanIp = getLocalIpAddress();
   const lanUrl = `http://${lanIp}:${targetPort}`;
-  console.log("\n" + pc2.bold(pc2.cyan("\u26A1 peer-port \u2014 Instant Global Public Tunnel & QA Suite")) + "\n");
-  console.log(`  \u{1F3AF} Local App:        ${pc2.green(`http://${targetHost}:${targetPort}`)}`);
-  console.log(`  \u{1F4F6} Local LAN:        ${pc2.dim(lanUrl)}`);
+  printAdBanner();
+  console.log(`  \u{1F3AF} Local App:        ${pc3.green(`http://${targetHost}:${targetPort}`)}`);
+  console.log(`  \u{1F4F6} Local LAN:        ${pc3.dim(lanUrl)}`);
   const pinGuard = new PinGuardProxy({
     targetPort,
     targetHost,
@@ -1912,11 +1920,11 @@ async function startGlobalTunnel(options) {
   });
   const tunnelPort = await pinGuard.start();
   if (options.pin) {
-    console.log(`  \u{1F512} Visitor PIN:      ${pc2.bold(pc2.magenta(`ACTIVE (PIN: ${options.pin})`))}`);
+    console.log(`  \u{1F512} Visitor PIN:      ${pc3.bold(pc3.magenta(`ACTIVE (PIN: ${options.pin})`))}`);
   }
-  const feedbackStatus = options.enableFeedback !== false ? pc2.green("ENABLED (Floating badge)") : pc2.dim("Disabled");
+  const feedbackStatus = options.enableFeedback !== false ? pc3.green("ENABLED (Floating badge)") : pc3.dim("Disabled");
   console.log(`  \u{1F4CC} Visual Feedback:  ${feedbackStatus}`);
-  console.log(pc2.yellow("  \u23F3 Generating secure public HTTPS link across the global internet..."));
+  console.log(pc3.yellow("  \u23F3 Generating secure public HTTPS link across the global internet..."));
   const { startTunnel } = await import("untun");
   const tunnel = await startTunnel({
     port: tunnelPort,
@@ -1985,14 +1993,14 @@ async function startGlobalTunnel(options) {
     }
   }
   console.log(`
-  \u{1F310} ${pc2.bold(pc2.green("Public Website Link:"))} ${pc2.underline(pc2.bold(pc2.cyan(publicUrl)))}
+  \u{1F310} ${pc3.bold(pc3.green("Public Website Link:"))} ${pc3.underline(pc3.bold(pc3.cyan(publicUrl)))}
 `);
   if (!options.noQr) {
-    console.log(pc2.dim("  Scan QR with your phone to open instantly:"));
+    console.log(pc3.dim("  Scan QR with your phone to open instantly:"));
     printQrCode(publicUrl);
     console.log("");
   }
-  console.log(pc2.dim("  Press Ctrl+C to stop sharing."));
+  console.log(pc3.dim("  Press Ctrl+C to stop sharing."));
   return {
     targetPort,
     publicUrl,
@@ -2026,7 +2034,7 @@ var CHUNK_SIZE = 32 * 1024;
 // src/proxy.ts
 import http2 from "http";
 import { Buffer as Buffer2 } from "buffer";
-import pc3 from "picocolors";
+import pc4 from "picocolors";
 var LocalHttpProxy = class {
   targetPort;
   targetHost;
@@ -2080,7 +2088,7 @@ var LocalHttpProxy = class {
     });
     localReq.on("error", (err) => {
       const duration = Date.now() - startTime;
-      console.error(pc3.red(`\u274C [Proxy Error] ${req.method} ${url}: ${err.message}`));
+      console.error(pc4.red(`\u274C [Proxy Error] ${req.method} ${url}: ${err.message}`));
       const errorBody = Buffer2.from(
         `<h1>502 Bad Gateway - peer-port</h1><p>Cannot connect to localhost:${this.targetPort}: ${err.message}</p>`
       );
@@ -2144,18 +2152,18 @@ var LocalHttpProxy = class {
     }
   }
   logTraffic(method, url, status, duration) {
-    let statusColored = pc3.green(String(status));
-    if (status >= 400 && status < 500) statusColored = pc3.yellow(String(status));
-    if (status >= 500) statusColored = pc3.red(String(status));
-    const methodColored = pc3.cyan(method.padEnd(6));
-    const durationColored = pc3.dim(`${duration}ms`);
-    console.log(`  ${pc3.magenta("\u21C4")} ${methodColored} ${pc3.white(url)} \u2192 ${statusColored} ${durationColored}`);
+    let statusColored = pc4.green(String(status));
+    if (status >= 400 && status < 500) statusColored = pc4.yellow(String(status));
+    if (status >= 500) statusColored = pc4.red(String(status));
+    const methodColored = pc4.cyan(method.padEnd(6));
+    const durationColored = pc4.dim(`${duration}ms`);
+    console.log(`  ${pc4.magenta("\u21C4")} ${methodColored} ${pc4.white(url)} \u2192 ${statusColored} ${durationColored}`);
   }
 };
 
 // src/webrtc.ts
 import { RTCPeerConnection } from "werift";
-import pc4 from "picocolors";
+import pc5 from "picocolors";
 var WebRtcBridge = class {
   pc;
   dataChannel = null;
@@ -2172,10 +2180,10 @@ var WebRtcBridge = class {
   setupPeerEvents() {
     this.pc.connectionStateChange.subscribe((state) => {
       if (state === "connected") {
-        console.log(pc4.green("  \u2714 WebRTC PeerConnection established! Direct P2P tunnel active."));
+        console.log(pc5.green("  \u2714 WebRTC PeerConnection established! Direct P2P tunnel active."));
         if (this.onConnected) this.onConnected();
       } else if (state === "disconnected" || state === "failed" || state === "closed") {
-        console.log(pc4.yellow(`  \u26A0 WebRTC PeerConnection state: ${state}`));
+        console.log(pc5.yellow(`  \u26A0 WebRTC PeerConnection state: ${state}`));
         if (this.onDisconnected) this.onDisconnected();
       }
     });
@@ -2194,9 +2202,9 @@ var WebRtcBridge = class {
     this.dataChannel = channel;
     channel.stateChanged.subscribe((state) => {
       if (state === "open") {
-        console.log(pc4.green("  \u2714 WebRTC DataChannel open! Ready for HTTP traffic."));
+        console.log(pc5.green("  \u2714 WebRTC DataChannel open! Ready for HTTP traffic."));
       } else if (state === "closed") {
-        console.log(pc4.yellow("  \u26A0 WebRTC DataChannel closed."));
+        console.log(pc5.yellow("  \u26A0 WebRTC DataChannel closed."));
       }
     });
     channel.message.subscribe((data) => {
@@ -2209,7 +2217,7 @@ var WebRtcBridge = class {
           channel.send(JSON.stringify({ type: "pong", timestamp: Date.now() }));
         }
       } catch (err) {
-        console.error(pc4.red(`  \u274C Failed to parse incoming WebRTC message: ${err.message}`));
+        console.error(pc5.red(`  \u274C Failed to parse incoming WebRTC message: ${err.message}`));
       }
     });
   }
@@ -2257,7 +2265,7 @@ import process4 from "process";
 import fs2 from "fs";
 import path2 from "path";
 import { WebSocketServer } from "ws";
-import pc5 from "picocolors";
+import pc6 from "picocolors";
 var SignalingServer = class {
   server;
   wss;
@@ -2309,7 +2317,7 @@ var SignalingServer = class {
   }
   setupWebSocket() {
     this.wss.on("connection", async (ws) => {
-      console.log(pc5.cyan("  \u{1F50C} Browser viewer connected for WebRTC handshake..."));
+      console.log(pc6.cyan("  \u{1F50C} Browser viewer connected for WebRTC handshake..."));
       try {
         const offerSdp = await this.bridge.createCompleteOffer();
         ws.send(JSON.stringify({ type: "offer", sdp: offerSdp }));
@@ -2317,16 +2325,16 @@ var SignalingServer = class {
           try {
             const data = JSON.parse(raw.toString());
             if (data.type === "answer") {
-              console.log(pc5.cyan("  \u{1F4E5} Received WebRTC SDP Answer from browser viewer!"));
+              console.log(pc6.cyan("  \u{1F4E5} Received WebRTC SDP Answer from browser viewer!"));
               await this.bridge.handleAnswer(data.sdp);
               ws.send(JSON.stringify({ type: "handshake-success" }));
             }
           } catch (err) {
-            console.error(pc5.red(`  \u274C Failed handling signaling message: ${err.message}`));
+            console.error(pc6.red(`  \u274C Failed handling signaling message: ${err.message}`));
           }
         });
       } catch (err) {
-        console.error(pc5.red(`  \u274C Failed during signaling handshake: ${err.message}`));
+        console.error(pc6.red(`  \u274C Failed during signaling handshake: ${err.message}`));
       }
     });
   }
@@ -2355,7 +2363,7 @@ var SignalingServer = class {
 };
 
 // src/p2p.ts
-import pc6 from "picocolors";
+import pc7 from "picocolors";
 async function startPeerTunnel(options) {
   const targetPort = options.targetPort;
   const targetHost = options.targetHost || "localhost";
@@ -2374,14 +2382,14 @@ async function startPeerTunnel(options) {
   const lanIp = getLocalIpAddress();
   const localUrl = `http://localhost:${actualSignalingPort}`;
   const lanUrl = `http://${lanIp}:${actualSignalingPort}`;
-  console.log("\n" + pc6.bold(pc6.cyan("\u26A1 peer-port \u2014 P2P WebRTC Direct Tunnel")) + "\n");
-  console.log(`  \u{1F3AF} Target App:      ${pc6.green(`http://${targetHost}:${targetPort}`)}`);
-  console.log(`  \u{1F4BB} Local Viewer:   ${pc6.underline(pc6.cyan(localUrl))}`);
-  console.log(`  \u{1F4F1} Network / Phone: ${pc6.underline(pc6.bold(pc6.yellow(lanUrl)))}`);
+  printAdBanner("P2P WebRTC");
+  console.log(`  \u{1F3AF} Target App:      ${pc7.green(`http://${targetHost}:${targetPort}`)}`);
+  console.log(`  \u{1F4BB} Local Viewer:   ${pc7.underline(pc7.cyan(localUrl))}`);
+  console.log(`  \u{1F4F1} Network / Phone: ${pc7.underline(pc7.bold(pc7.yellow(lanUrl)))}`);
   console.log(`  \u{1F512} Security:        Direct End-to-End P2P WebRTC DataChannel
 `);
   if (!options.noQr) {
-    console.log(pc6.dim("  Scan QR with your phone to open instantly:"));
+    console.log(pc7.dim("  Scan QR with your phone to open instantly:"));
     printQrCode(lanUrl);
     console.log("");
   }
@@ -2405,4 +2413,4 @@ export {
   SignalingServer,
   startPeerTunnel
 };
-//# sourceMappingURL=chunk-ZIXSO2TD.js.map
+//# sourceMappingURL=chunk-5SHQM2HM.js.map

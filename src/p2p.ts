@@ -3,6 +3,7 @@ import { WebRtcBridge } from './webrtc.js';
 import { SignalingServer } from './signaling.js';
 import { getLocalIpAddress } from './network.js';
 import { printQrCode } from './qrcode.js';
+import { printAdBanner } from './banner.js';
 import pc from 'picocolors';
 
 export interface TunnelOptions {
@@ -44,7 +45,7 @@ export async function startPeerTunnel(options: TunnelOptions): Promise<TunnelIns
   const localUrl = `http://localhost:${actualSignalingPort}`;
   const lanUrl = `http://${lanIp}:${actualSignalingPort}`;
 
-  console.log('\n' + pc.bold(pc.cyan('⚡ peer-port — P2P WebRTC Direct Tunnel')) + '\n');
+  printAdBanner('P2P WebRTC');
   console.log(`  🎯 Target App:      ${pc.green(`http://${targetHost}:${targetPort}`)}`);
   console.log(`  💻 Local Viewer:   ${pc.underline(pc.cyan(localUrl))}`);
   console.log(`  📱 Network / Phone: ${pc.underline(pc.bold(pc.yellow(lanUrl)))}`);
