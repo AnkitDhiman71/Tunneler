@@ -69,6 +69,68 @@ export async function startGlobalTunnel(options: GlobalTunnelOptions): Promise<G
   pinGuard.telemetry.setPublicUrl(publicUrl);
   const localAdminUrl = `http://localhost:${tunnelPort}/__peer_admin`;
 
+  const DEFAULT_HUB_URL = 'https://tunneler-admin.onrender.com';
+  const hubUrl = (process.env.HUB_URL || DEFAULT_HUB_URL).replace(/\/$/, '');
+  const isRender = Boolean(process.env.RENDER);
+
+  let heartbeatInterval: NodeJS.Timeout | null = null;
+  const tunnelSessionId = 'tun_' + Math.random().toString(36).substring(2, 9) + '_' + Date.now().toString(36);
+
+  if (!isRender && hubUrl) {
+    const registerPayload = {
+      id: tunnelSessionId,
+      publicUrl,
+      target: `http://${targetHost}:${targetPort}`,
+      startedAt: Date.now(),
+    };
+
+    fetch(`${hubUrl}/__peer_hub_register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(registerPayload),
+    }).catch(() => {});
+
+    heartbeatInterval = setInterval(async () => {
+      try {
+        const stats = pinGuard.telemetry.getStats();
+        const payload = {
+          id: tunnelSessionId,
+          publicUrl,
+          target: `http://${targetHost}:${targetPort}`,
+          startedAt: pinGuard.telemetry.startedAt,
+          totalRequests: stats.totalRequests,
+          activeRequests: stats.activeRequests,
+          uniqueVisitors: stats.uniqueVisitors,
+          avgLatency: stats.avgLatency,
+          requestGroups: stats.requestGroups,
+          feedbacks: stats.feedbacks,
+        };
+
+        const res = await fetch(`${hubUrl}/__peer_hub_heartbeat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+
+        if (res.ok) {
+          const data: any = await res.json();
+          if (typeof data.isPaused === 'boolean') {
+            pinGuard.telemetry.isPaused = data.isPaused;
+          }
+          if (Array.isArray(data.disabledPages)) {
+            pinGuard.telemetry.disabledPages = new Set(data.disabledPages);
+          }
+        }
+      } catch {
+        // tolerate hub offline / network jitter
+      }
+    }, 3000);
+
+    if (typeof heartbeatInterval.unref === 'function') {
+      heartbeatInterval.unref();
+    }
+  }
+
   console.log(`\n  🌐 ${pc.bold(pc.green('Public Website Link:'))} ${pc.underline(pc.bold(pc.cyan(publicUrl)))}\n`);
 
   if (!options.noQr) {
@@ -87,6 +149,18 @@ export async function startGlobalTunnel(options: GlobalTunnelOptions): Promise<G
     adminPassword: pinGuard.telemetry.adminPassword,
     pin: options.pin,
     close: async () => {
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval);
+      }
+      if (!isRender && hubUrl) {
+        try {
+          await fetch(`${hubUrl}/__peer_hub_disconnect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: tunnelSessionId }),
+          });
+        } catch {}
+      }
       pinGuard.close();
       await tunnel.close();
     },

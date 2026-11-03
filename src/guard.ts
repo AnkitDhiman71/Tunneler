@@ -63,6 +63,70 @@ export class PinGuardProxy {
       }
     }
 
+    // 0. Auto-redirect on Render or hub domain to Admin Portal for any non-internal route
+    const isRenderHub = Boolean(process.env.RENDER || req.headers.host?.includes('onrender.com'));
+    if (isRenderHub && !url.pathname.startsWith('/__peer_')) {
+      res.writeHead(302, { Location: '/__peer_admin' });
+      res.end();
+      return;
+    }
+
+    // Hub Registration (CLI connects to central admin hub)
+    if (url.pathname === '/__peer_hub_register' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const tunnel = this.telemetry.registerRemoteTunnel(data, clientIp);
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, isPaused: tunnel.isPaused, disabledPages: tunnel.disabledPages }));
+        } catch (err: any) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
+    // Hub Heartbeat & Live Telemetry Sync
+    if (url.pathname === '/__peer_hub_heartbeat' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          let tunnel = this.telemetry.updateRemoteTunnel(data);
+          if (!tunnel) {
+            tunnel = this.telemetry.registerRemoteTunnel(data, clientIp);
+          }
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, isPaused: tunnel.isPaused, disabledPages: tunnel.disabledPages }));
+        } catch (err: any) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
+    // Hub Disconnect Notification
+    if (url.pathname === '/__peer_hub_disconnect' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          if (data && data.id) {
+            this.telemetry.remoteTunnels.delete(data.id);
+          }
+        } catch {}
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      });
+      return;
+    }
+
     // 1. Admin Login POST
     if (url.pathname === '/__peer_admin_login' && req.method === 'POST') {
       let body = '';
@@ -71,7 +135,7 @@ export class PinGuardProxy {
         const params = new URLSearchParams(body);
         const enteredPassword = (params.get('password') || '').trim();
 
-        if (enteredPassword === this.telemetry.adminPassword) {
+        if (enteredPassword && enteredPassword === this.telemetry.adminPassword.trim()) {
           res.writeHead(302, {
             'Set-Cookie': `peer_admin_auth=${this.adminAuthToken}; Path=/; HttpOnly; SameSite=Lax`,
             Location: '/__peer_admin',
@@ -212,7 +276,22 @@ export class PinGuardProxy {
   }
 
   private handleAdminAction(payload: any): void {
-    const { action } = payload;
+    const { action, tunnelId } = payload;
+    if (tunnelId && tunnelId !== 'local_tunnel') {
+      const remote = this.telemetry.remoteTunnels.get(tunnelId);
+      if (remote) {
+        if (action === 'toggle_pause') {
+          remote.isPaused = !remote.isPaused;
+        } else if (action === 'toggle_disable_page' && payload.route) {
+          const route = payload.route.trim().toLowerCase();
+          const idx = remote.disabledPages.indexOf(route);
+          if (idx >= 0) remote.disabledPages.splice(idx, 1);
+          else remote.disabledPages.push(route);
+        }
+        return;
+      }
+    }
+
     switch (action) {
       case 'toggle_pause':
         this.telemetry.isPaused = !this.telemetry.isPaused;

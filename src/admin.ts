@@ -1,4 +1,34 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import process from 'node:process';
+
+// Automatically load .env file if present
+function loadEnv() {
+  try {
+    if (typeof (process as any).loadEnvFile === 'function') {
+      (process as any).loadEnvFile();
+    }
+  } catch (e) {}
+
+  try {
+    const envPath = path.resolve(process.cwd(), '.env');
+    if (fs.existsSync(envPath)) {
+      const content = fs.readFileSync(envPath, 'utf-8');
+      for (const line of content.split('\n')) {
+        const trimmed = line.trim();
+        if (trimmed && !trimmed.startsWith('#') && trimmed.includes('=')) {
+          const [key, ...rest] = trimmed.split('=');
+          const k = key.trim();
+          if (k && !process.env[k]) {
+            process.env[k] = rest.join('=').trim().replace(/^["']|["']$/g, '');
+          }
+        }
+      }
+    }
+  } catch (e) {}
+}
+
+loadEnv();
 
 export interface FeedbackItem {
   id: string;
@@ -33,6 +63,23 @@ export interface ParentRequestGroup {
   subRequests: SubRequestItem[];
 }
 
+export interface RemoteTunnelInfo {
+  id: string;
+  publicUrl: string;
+  target: string;
+  clientIp: string;
+  startedAt: number;
+  lastPing: number;
+  totalRequests: number;
+  activeRequests: number;
+  uniqueVisitors: number;
+  avgLatency: number;
+  isPaused: boolean;
+  disabledPages: string[];
+  requestGroups: ParentRequestGroup[];
+  feedbacks: FeedbackItem[];
+}
+
 export class AdminTelemetry {
   public publicUrl = '';
   public targetHost = 'localhost';
@@ -49,6 +96,8 @@ export class AdminTelemetry {
   public disabledPages = new Set<string>(); // Route/Page blocklist
   public adminPassword: string;
 
+  public remoteTunnels = new Map<string, RemoteTunnelInfo>();
+
   public statusCounts: Record<string, number> = {
     '2xx': 0,
     '3xx': 0,
@@ -57,11 +106,57 @@ export class AdminTelemetry {
   };
 
   constructor(adminPassword?: string) {
+    // Reload env to ensure fresh values
+    loadEnv();
     this.adminPassword = adminPassword || process.env.ADMIN_PASSWORD || 'admin_Ankit@1320';
   }
 
   public setPublicUrl(url: string): void {
     this.publicUrl = url;
+  }
+
+  public registerRemoteTunnel(info: any, clientIp: string): RemoteTunnelInfo {
+    const tunnel: RemoteTunnelInfo = {
+      id: info.id || 'tun_' + Math.random().toString(36).substring(2, 9),
+      publicUrl: info.publicUrl || '',
+      target: info.target || 'localhost:3000',
+      clientIp: clientIp || '127.0.0.1',
+      startedAt: info.startedAt || Date.now(),
+      lastPing: Date.now(),
+      totalRequests: info.totalRequests || 0,
+      activeRequests: info.activeRequests || 0,
+      uniqueVisitors: info.uniqueVisitors || 1,
+      avgLatency: info.avgLatency || 0,
+      isPaused: false,
+      disabledPages: [],
+      requestGroups: [],
+      feedbacks: [],
+    };
+    this.remoteTunnels.set(tunnel.id, tunnel);
+    return tunnel;
+  }
+
+  public updateRemoteTunnel(info: any): RemoteTunnelInfo | undefined {
+    const tunnel = this.remoteTunnels.get(info.id);
+    if (!tunnel) return undefined;
+    tunnel.lastPing = Date.now();
+    if (info.publicUrl) tunnel.publicUrl = info.publicUrl;
+    if (info.totalRequests !== undefined) tunnel.totalRequests = info.totalRequests;
+    if (info.activeRequests !== undefined) tunnel.activeRequests = info.activeRequests;
+    if (info.uniqueVisitors !== undefined) tunnel.uniqueVisitors = info.uniqueVisitors;
+    if (info.avgLatency !== undefined) tunnel.avgLatency = info.avgLatency;
+    if (info.requestGroups) tunnel.requestGroups = info.requestGroups;
+    if (info.feedbacks) tunnel.feedbacks = info.feedbacks;
+    return tunnel;
+  }
+
+  public pruneInactiveTunnels(): void {
+    const now = Date.now();
+    for (const [id, t] of this.remoteTunnels.entries()) {
+      if (now - t.lastPing > 15000) {
+        this.remoteTunnels.delete(id);
+      }
+    }
   }
 
   public getAssetType(url: string, headers: Record<string, any>): string {
@@ -105,7 +200,6 @@ export class AdminTelemetry {
       timestamp: Date.now(),
     };
 
-    // If it's a primary document or API root, create a new Parent Request Group
     if (assetType === 'document' || !this.currentParentGroup) {
       const parentGroup: ParentRequestGroup = {
         id: 'req_' + Math.random().toString(36).substring(2, 9),
@@ -121,7 +215,6 @@ export class AdminTelemetry {
       this.requestGroups.unshift(parentGroup);
       if (this.requestGroups.length > 50) this.requestGroups.pop();
     } else {
-      // Group sub-requests (CSS, JS, images, icons) under current parent page request
       this.currentParentGroup.subRequests.push(subItem);
     }
   }
@@ -158,8 +251,59 @@ export class AdminTelemetry {
   }
 
   public getStats() {
+    this.pruneInactiveTunnels();
     const avgLatency = this.totalRequests > 0 ? Math.round(this.totalDuration / this.totalRequests) : 0;
     const effectiveUrl = this.publicUrl || `http://${this.targetHost}:${this.targetPort}`;
+
+    const tunnelsList: Array<{
+      id: string;
+      publicUrl: string;
+      target: string;
+      startedAt: number;
+      totalRequests: number;
+      uniqueVisitors: number;
+      avgLatency: number;
+      isPaused: boolean;
+      disabledPages: string[];
+      requestGroups: ParentRequestGroup[];
+      feedbacks: FeedbackItem[];
+    }> = [];
+
+    // Add remote user tunnels first
+    for (const t of this.remoteTunnels.values()) {
+      tunnelsList.push({
+        id: t.id,
+        publicUrl: t.publicUrl,
+        target: t.target,
+        startedAt: t.startedAt,
+        totalRequests: t.totalRequests,
+        uniqueVisitors: t.uniqueVisitors,
+        avgLatency: t.avgLatency,
+        isPaused: t.isPaused,
+        disabledPages: t.disabledPages,
+        requestGroups: t.requestGroups,
+        feedbacks: t.feedbacks,
+      });
+    }
+
+    // Include local tunnel if active (has publicUrl) or running locally without remote tunnels
+    const isRender = Boolean(process.env.RENDER);
+    if ((!isRender && tunnelsList.length === 0) || (this.publicUrl && !this.publicUrl.includes('onrender.com'))) {
+      tunnelsList.push({
+        id: 'local_tunnel',
+        publicUrl: effectiveUrl,
+        target: `http://${this.targetHost}:${this.targetPort}`,
+        startedAt: this.startedAt,
+        totalRequests: this.totalRequests,
+        uniqueVisitors: this.uniqueVisitors.size,
+        avgLatency,
+        isPaused: this.isPaused,
+        disabledPages: Array.from(this.disabledPages),
+        requestGroups: this.requestGroups.slice(0, 50),
+        feedbacks: this.feedbacks,
+      });
+    }
+
     return {
       publicUrl: effectiveUrl,
       targetHost: this.targetHost,
@@ -175,6 +319,7 @@ export class AdminTelemetry {
       feedbacksCount: this.feedbacks.filter((f) => !f.resolved).length,
       requestGroups: this.requestGroups.slice(0, 50),
       feedbacks: this.feedbacks,
+      tunnels: tunnelsList,
     };
   }
 
@@ -556,7 +701,7 @@ export class AdminTelemetry {
       </div>
     </div>
     <div class="tabs">
-      <button class="tab-btn active" onclick="switchTab('websites', this)">🌐 Hosted Websites</button>
+      <button class="tab-btn active" onclick="switchTab('websites', this)">🌐 Hosted Websites (${stats.tunnels.length})</button>
       <button class="tab-btn" onclick="switchTab('feedback', this)">📌 Bug Reports (${stats.feedbacksCount})</button>
       <button class="tab-btn" onclick="switchTab('pages', this)">🚫 Blocked Pages (${stats.disabledPages.length})</button>
     </div>
@@ -574,7 +719,7 @@ export class AdminTelemetry {
         }</p>
       </div>
       <div>
-        <button id="btn-kill" class="btn-toggle-kill ${stats.isPaused ? 'active-paused' : 'active-live'}" onclick="toggleKillSwitch()">
+        <button id="btn-kill" class="btn-toggle-kill ${stats.isPaused ? 'active-paused' : 'active-live'}" onclick="toggleKillSwitch('local_tunnel')">
           ${stats.isPaused ? '▶ Resume Public Access' : '🛑 KILL SWITCH (Pause Access)'}
         </button>
       </div>
@@ -618,36 +763,44 @@ export class AdminTelemetry {
           </tr>
         </thead>
         <tbody id="table-websites">
-          <tr class="website-row">
-            <td>
-              <a href="${stats.publicUrl}" target="_blank" class="tunnel-link" id="site-link">
-                ${stats.publicUrl} ↗
-              </a>
-              <button class="btn-copy" onclick="copyText('${stats.publicUrl}')" title="Copy public link">📋 Copy</button>
-            </td>
-            <td style="font-family: monospace; color: #8b949e;" id="site-target">
-              http://${stats.targetHost}:${stats.targetPort}
-            </td>
-            <td id="site-status-badge">
-              ${stats.isPaused ? '<span class="status-badge-paused">🔴 PAUSED (503)</span>' : '<span class="status-badge-live">🟢 LIVE & ONLINE</span>'}
-            </td>
-            <td id="site-activity-summary" style="color: #e6edf3; font-weight: 500;">
-              ${stats.totalRequests} reqs • ${stats.uniqueVisitors} visitors • ${stats.avgLatency}ms avg
-            </td>
-            <td>
-              <div class="btn-actions-group">
-                <button class="btn-live-preview" onclick="openLivePreviewModal('${stats.publicUrl}')" title="Live Preview Website">
-                  👁️ Live Preview
-                </button>
-                <button id="btn-row-kill" class="btn-row-kill ${stats.isPaused ? 'resume' : 'kill'}" onclick="toggleKillSwitch()" title="Toggle Kill Switch">
-                  ${stats.isPaused ? '▶ Resume' : '🛑 Kill Switch'}
-                </button>
-                <button class="btn-see-requests" onclick="openRequestsModal()" title="Inspect child requests & statistics">
-                  📊 See Requests & Statistics
-                </button>
-              </div>
-            </td>
-          </tr>
+          ${stats.tunnels.length === 0
+            ? '<tr><td colspan="5" style="text-align: center; color: #8b949e; padding: 3rem 1rem;">⚡ No active developer tunnels connected.<br><span style="font-size: 0.85rem; color: #58a6ff; margin-top: 6px; display: inline-block;">Run <code>npx peer-port 3000</code> in your or your friend\'s terminal to share localhost and see it appear here live!</span></td></tr>'
+            : stats.tunnels
+            .map(
+              (t) => `
+            <tr class="website-row" id="row-${t.id}">
+              <td>
+                <a href="${t.publicUrl}" target="_blank" class="tunnel-link" id="site-link-${t.id}">
+                  ${t.publicUrl} ↗
+                </a>
+                <button class="btn-copy" onclick="copyText('${t.publicUrl}')" title="Copy public link">📋 Copy</button>
+              </td>
+              <td style="font-family: monospace; color: #8b949e;" id="site-target-${t.id}">
+                ${t.target}
+              </td>
+              <td id="site-status-badge-${t.id}">
+                ${t.isPaused ? '<span class="status-badge-paused">🔴 PAUSED (503)</span>' : '<span class="status-badge-live">🟢 LIVE & ONLINE</span>'}
+              </td>
+              <td id="site-activity-summary-${t.id}" style="color: #e6edf3; font-weight: 500;">
+                ${t.totalRequests} reqs • ${t.uniqueVisitors} visitors • ${t.avgLatency}ms avg
+              </td>
+              <td>
+                <div class="btn-actions-group">
+                  <button class="btn-live-preview" onclick="openLivePreviewModal('${t.publicUrl}')" title="Live Preview Website">
+                    👁️ Live Preview
+                  </button>
+                  <button id="btn-row-kill-${t.id}" class="btn-row-kill ${t.isPaused ? 'resume' : 'kill'}" onclick="toggleKillSwitch('${t.id}')" title="Toggle Kill Switch">
+                    ${t.isPaused ? '▶ Resume' : '🛑 Kill Switch'}
+                  </button>
+                  <button class="btn-see-requests" onclick="openRequestsModal('${t.id}')" title="Inspect child requests & statistics">
+                    📊 See Requests & Statistics
+                  </button>
+                </div>
+              </td>
+            </tr>
+          `
+            )
+            .join('')}
         </tbody>
       </table>
     </div>
@@ -848,6 +1001,7 @@ export class AdminTelemetry {
 
   <script>
     let currentStats = ${JSON.stringify(stats)};
+    let activeModalTunnelId = 'local_tunnel';
 
     function switchTab(tab, btn) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -874,7 +1028,9 @@ export class AdminTelemetry {
 
     /* MODAL CONTROLS */
     function openLivePreviewModal(url) {
-      document.getElementById('preview-iframe').src = '/';
+      document.getElementById('preview-iframe').src = url;
+      document.getElementById('preview-modal-url').textContent = url;
+      document.getElementById('preview-new-tab').href = url;
       document.getElementById('modal-preview').classList.add('open');
     }
     function closeLivePreviewModal() {
@@ -896,11 +1052,62 @@ export class AdminTelemetry {
       }
     }
 
-    function openRequestsModal() {
+    function openRequestsModal(tunnelId = 'local_tunnel') {
+      activeModalTunnelId = tunnelId;
+      const targetTunnel = (currentStats.tunnels || []).find(t => t.id === tunnelId) || currentStats;
+      document.getElementById('req-modal-url').textContent = targetTunnel.publicUrl;
+      renderModalRequestsTable(targetTunnel);
       document.getElementById('modal-requests').classList.add('open');
     }
+
     function closeRequestsModal() {
       document.getElementById('modal-requests').classList.remove('open');
+    }
+
+    function renderModalRequestsTable(targetTunnel) {
+      const modalTable = document.getElementById('modal-table-traffic');
+      const groups = targetTunnel.requestGroups || [];
+      const disabledPages = targetTunnel.disabledPages || [];
+
+      if (!groups.length) {
+        modalTable.innerHTML = '<tr><td colspan="9" style="text-align: center; color: #8b949e; padding: 20px;">No requests recorded yet for this tunnel.</td></tr>';
+        return;
+      }
+
+      modalTable.innerHTML = groups.map(group => {
+        const isBanned = disabledPages.includes(group.url.toLowerCase());
+        return \`
+          <tr class="parent-row" onclick="toggleGroup('\${group.id}')">
+            <td><span class="expand-arrow" id="arrow-\${group.id}">▶</span></td>
+            <td><span class="badge badge-\${group.method.toLowerCase()}">\${group.method}</span></td>
+            <td style="color: #fff;">\${group.url}</td>
+            <td class="status-\${Math.floor(group.status / 100)}xx">\${group.status}</td>
+            <td>\${group.duration}ms</td>
+            <td style="color: #58a6ff;">\${group.subRequests.length} sub-assets</td>
+            <td>\${group.ip}</td>
+            <td>\${new Date(group.timestamp).toLocaleTimeString()}</td>
+            <td>
+              \${isBanned 
+                ? \`<button class="action-btn-unban" onclick="event.stopPropagation(); unbanPage('\${group.url}')">✅ Enable Page</button>\`
+                : \`<button class="action-btn-ban" onclick="event.stopPropagation(); banPage('\${group.url}')">🚫 Disable Page</button>\`
+              }
+            </td>
+          </tr>
+          \${group.subRequests.map(sub => \`
+            <tr class="child-row child-of-\${group.id}">
+              <td></td>
+              <td><span style="font-size: 0.7rem; color: #8b949e;">\${sub.method}</span></td>
+              <td>↳ \${sub.url} <span style="font-size: 0.7rem; color: #58a6ff;">(\${sub.type})</span></td>
+              <td class="status-\${Math.floor(sub.status / 100)}xx">\${sub.status}</td>
+              <td>\${sub.duration}ms</td>
+              <td>-</td>
+              <td>-</td>
+              <td>\${new Date(sub.timestamp).toLocaleTimeString()}</td>
+              <td></td>
+            </tr>
+          \`).join('')}
+        \`;
+      }).join('');
     }
 
     function copyText(text) {
@@ -917,7 +1124,7 @@ export class AdminTelemetry {
         const res = await fetch('/__peer_admin_action', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action, ...data })
+          body: JSON.stringify({ action, tunnelId: activeModalTunnelId, ...data })
         });
         return await res.json();
       } catch (err) {
@@ -925,8 +1132,9 @@ export class AdminTelemetry {
       }
     }
 
-    async function toggleKillSwitch() {
-      const res = await sendAdminAction('toggle_pause');
+    async function toggleKillSwitch(tunnelId = 'local_tunnel') {
+      activeModalTunnelId = tunnelId;
+      const res = await sendAdminAction('toggle_pause', { tunnelId });
       if (res && res.success) updateUIState(res.stats);
     }
 
@@ -975,8 +1183,6 @@ export class AdminTelemetry {
       const killTitle = document.getElementById('kill-title');
       const killDesc = document.getElementById('kill-desc');
       const killBtn = document.getElementById('btn-kill');
-      const rowKillBtn = document.getElementById('btn-row-kill');
-      const siteStatusBadge = document.getElementById('site-status-badge');
 
       if (data.isPaused) {
         badge.className = 'status-pill paused';
@@ -985,13 +1191,6 @@ export class AdminTelemetry {
         killDesc.textContent = 'Visitors are currently blocked with a 503 Maintenance screen. Your local app is completely private.';
         killBtn.className = 'btn-toggle-kill active-paused';
         killBtn.textContent = '▶ Resume Public Access';
-        if (rowKillBtn) {
-          rowKillBtn.className = 'btn-row-kill resume';
-          rowKillBtn.textContent = '▶ Resume';
-        }
-        if (siteStatusBadge) {
-          siteStatusBadge.innerHTML = '<span class="status-badge-paused">🔴 PAUSED (503)</span>';
-        }
       } else {
         badge.className = 'status-pill live';
         badge.textContent = '🟢 LIVE & STREAMING';
@@ -999,81 +1198,57 @@ export class AdminTelemetry {
         killDesc.textContent = 'Anyone with the link can access your website. Click the kill switch to instantly freeze external access.';
         killBtn.className = 'btn-toggle-kill active-live';
         killBtn.textContent = '🛑 KILL SWITCH (Pause Access)';
-        if (rowKillBtn) {
-          rowKillBtn.className = 'btn-row-kill kill';
-          rowKillBtn.textContent = '🛑 Kill Switch';
-        }
-        if (siteStatusBadge) {
-          siteStatusBadge.innerHTML = '<span class="status-badge-live">🟢 LIVE & ONLINE</span>';
-        }
       }
 
       document.getElementById('val-active').textContent = data.activeRequests;
       document.getElementById('val-total').textContent = data.totalRequests;
       document.getElementById('val-visitors').textContent = data.uniqueVisitors;
       document.getElementById('val-latency').textContent = data.avgLatency + ' ms';
-      document.getElementById('site-activity-summary').textContent =
-        data.totalRequests + ' reqs • ' + data.uniqueVisitors + ' visitors • ' + data.avgLatency + 'ms avg';
 
-      // Status breakdown in modal
-      if (document.getElementById('modal-val-2xx')) {
-        document.getElementById('modal-val-2xx').textContent = data.statusCounts['2xx'] || 0;
-        document.getElementById('modal-val-3xx').textContent = data.statusCounts['3xx'] || 0;
-        document.getElementById('modal-val-4xx').textContent = data.statusCounts['4xx'] || 0;
-        document.getElementById('modal-val-5xx').textContent = data.statusCounts['5xx'] || 0;
-      }
-
-      // Update Disabled Pages List
-      const pagesList = document.getElementById('disabled-pages-list');
-      if (data.disabledPages.length === 0) {
-        pagesList.innerHTML = '<p style="color: #8b949e;">No pages are currently disabled. All website routes are accessible.</p>';
-      } else {
-        pagesList.innerHTML = data.disabledPages.map(page => \`
-          <div style="background: #0d1117; border: 1px solid rgba(240,246,252,0.1); padding: 10px 14px; border-radius: 8px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center;">
-            <span style="font-family: monospace; color: #f85149; font-weight: 600;">🚫 \${page}</span>
-            <button class="action-btn-unban" onclick="unbanPage('\${page}')">✔ Re-enable Page</button>
-          </div>
-        \`).join('');
-      }
-
-      // Re-render requests modal table if modal is populated
-      const modalTable = document.getElementById('modal-table-traffic');
-      if (modalTable && data.requestGroups) {
-        modalTable.innerHTML = data.requestGroups.map(group => {
-          const isBanned = data.disabledPages.includes(group.url.toLowerCase());
-          return \`
-            <tr class="parent-row" onclick="toggleGroup('\${group.id}')">
-              <td><span class="expand-arrow" id="arrow-\${group.id}">▶</span></td>
-              <td><span class="badge badge-\${group.method.toLowerCase()}">\${group.method}</span></td>
-              <td style="color: #fff;">\${group.url}</td>
-              <td class="status-\${Math.floor(group.status / 100)}xx">\${group.status}</td>
-              <td>\${group.duration}ms</td>
-              <td style="color: #58a6ff;">\${group.subRequests.length} sub-assets</td>
-              <td>\${group.ip}</td>
-              <td>\${new Date(group.timestamp).toLocaleTimeString()}</td>
+      // Update Tunnels Table
+      const tableBody = document.getElementById('table-websites');
+      if (tableBody && data.tunnels) {
+        if (data.tunnels.length === 0) {
+          tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #8b949e; padding: 3rem 1rem;">⚡ No active developer tunnels connected.<br><span style="font-size: 0.85rem; color: #58a6ff; margin-top: 6px; display: inline-block;">Run <code>npx peer-port 3000</code> in your or your friend\\\'s terminal to share localhost and see it appear here live!</span></td></tr>';
+        } else {
+          tableBody.innerHTML = data.tunnels.map(t => \`
+            <tr class="website-row" id="row-\${t.id}">
               <td>
-                \${isBanned 
-                  ? \`<button class="action-btn-unban" onclick="event.stopPropagation(); unbanPage('\${group.url}')">✅ Enable Page</button>\`
-                  : \`<button class="action-btn-ban" onclick="event.stopPropagation(); banPage('\${group.url}')">🚫 Disable Page</button>\`
-                }
+                <a href="\${t.publicUrl}" target="_blank" class="tunnel-link" id="site-link-\${t.id}">
+                  \${t.publicUrl} ↗
+                </a>
+                <button class="btn-copy" onclick="copyText('\${t.publicUrl}')" title="Copy public link">📋 Copy</button>
+              </td>
+              <td style="font-family: monospace; color: #8b949e;" id="site-target-\${t.id}">
+                \${t.target}
+              </td>
+              <td id="site-status-badge-\${t.id}">
+                \${t.isPaused ? '<span class="status-badge-paused">🔴 PAUSED (503)</span>' : '<span class="status-badge-live">🟢 LIVE & ONLINE</span>'}
+              </td>
+              <td id="site-activity-summary-\${t.id}" style="color: #e6edf3; font-weight: 500;">
+                \${t.totalRequests} reqs • \${t.uniqueVisitors} visitors • \${t.avgLatency}ms avg
+              </td>
+              <td>
+                <div class="btn-actions-group">
+                  <button class="btn-live-preview" onclick="openLivePreviewModal('\${t.publicUrl}')" title="Live Preview Website">
+                    👁️ Live Preview
+                  </button>
+                  <button id="btn-row-kill-\${t.id}" class="btn-row-kill \${t.isPaused ? 'resume' : 'kill'}" onclick="toggleKillSwitch('\${t.id}')" title="Toggle Kill Switch">
+                    \${t.isPaused ? '▶ Resume' : '🛑 Kill Switch'}
+                  </button>
+                  <button class="btn-see-requests" onclick="openRequestsModal('\${t.id}')" title="Inspect child requests & statistics">
+                    📊 See Requests & Statistics
+                  </button>
+                </div>
               </td>
             </tr>
-            \${group.subRequests.map(sub => \`
-              <tr class="child-row child-of-\${group.id}">
-                <td></td>
-                <td><span style="font-size: 0.7rem; color: #8b949e;">\${sub.method}</span></td>
-                <td>↳ \${sub.url} <span style="font-size: 0.7rem; color: #58a6ff;">(\${sub.type})</span></td>
-                <td class="status-\${Math.floor(sub.status / 100)}xx">\${sub.status}</td>
-                <td>\${sub.duration}ms</td>
-                <td>-</td>
-                <td>-</td>
-                <td>\${new Date(sub.timestamp).toLocaleTimeString()}</td>
-                <td></td>
-              </tr>
-            \`).join('')}
-          \`;
-        }).join('');
+          \`).join('');
+        }
       }
+
+      // Update Modal if open
+      const targetTunnel = (data.tunnels || []).find(t => t.id === activeModalTunnelId) || data;
+      renderModalRequestsTable(targetTunnel);
     }
 
     // Auto-refresh every 2.5 seconds
