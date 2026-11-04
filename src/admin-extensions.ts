@@ -262,19 +262,19 @@ export function renderVisitorIntelligencePanel(
       <div class="intel-grid">
         <div class="intel-card">
           <div class="title">Active Visitors Now</div>
-          <div class="val" style="color: #3fb950;">🟢 ${summary.activeNow} <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">online</span></div>
+          <div class="val" id="val-intel-active" style="color: #3fb950;">🟢 ${summary.activeNow} <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">online</span></div>
         </div>
         <div class="intel-card">
           <div class="title">Total Distinct Visitors</div>
-          <div class="val">👥 ${summary.totalVisitors}</div>
+          <div class="val" id="val-intel-total">👥 ${summary.totalVisitors}</div>
         </div>
         <div class="intel-card">
           <div class="title">Global Geographic Reach</div>
-          <div class="val">🌍 ${summary.countries.length} <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">countries</span></div>
+          <div class="val" id="val-intel-reach">🌍 ${summary.countries.length} <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">countries</span></div>
         </div>
         <div class="intel-card">
           <div class="title">Mobile vs Desktop</div>
-          <div class="val" style="font-size: 1.1rem; color: #58a6ff;">
+          <div class="val" id="val-intel-devices" style="font-size: 1.1rem; color: #58a6ff;">
             📱 ${summary.devices.mobile} • 💻 ${summary.devices.desktop} • 📟 ${summary.devices.tablet}
           </div>
         </div>

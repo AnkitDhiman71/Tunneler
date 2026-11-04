@@ -26,6 +26,15 @@ export interface GeoLocation {
   lng: number;
 }
 
+export function getFlagEmoji(countryCode: string): string {
+  if (!countryCode || countryCode.length !== 2) return '🌐';
+  const codePoints = countryCode
+    .toUpperCase()
+    .split('')
+    .map((c) => 127397 + c.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
+}
+
 const COUNTRY_REGISTRY: Record<string, GeoLocation> = {
   IN: { countryCode: 'IN', countryName: 'India', flag: '🇮🇳', lat: 20.59, lng: 78.96 },
   US: { countryCode: 'US', countryName: 'United States', flag: '🇺🇸', lat: 37.09, lng: -95.71 },
@@ -56,6 +65,7 @@ const COUNTRY_REGISTRY: Record<string, GeoLocation> = {
 export class VisitorIntelligence {
   private visitors = new Map<string, VisitorProfile>();
   private blockedIps = new Set<string>();
+  private static geoIpCache = new Map<string, GeoLocation>();
 
   public parseUserAgent(ua: string): { deviceType: 'Desktop' | 'Mobile' | 'Tablet' | 'Bot'; os: string; browser: string } {
     if (!ua) {
@@ -96,22 +106,60 @@ export class VisitorIntelligence {
     return { deviceType, os, browser };
   }
 
-  public resolveGeo(headers: Record<string, any>, ip: string): GeoLocation {
-    const cfCountry = (headers['cf-ipcountry'] || headers['x-country-code'] || '').toUpperCase();
+  public resolveGeo(headers: Record<string, any> = {}, ip: string = '', fallbackCountry?: string): GeoLocation {
+    const cfCountry = (headers['cf-ipcountry'] || headers['x-country-code'] || fallbackCountry || '').toUpperCase();
     if (cfCountry && COUNTRY_REGISTRY[cfCountry]) {
       return COUNTRY_REGISTRY[cfCountry];
     }
 
+    if (ip && VisitorIntelligence.geoIpCache.has(ip)) {
+      return VisitorIntelligence.geoIpCache.get(ip)!;
+    }
+
     // Check for local loopback
-    if (ip === '127.0.0.1' || ip === 'localhost' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.')) {
+    if (!ip || ip === '127.0.0.1' || ip === 'localhost' || ip === '::1' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip === 'LOCAL') {
+      if (cfCountry && COUNTRY_REGISTRY[cfCountry]) {
+        return COUNTRY_REGISTRY[cfCountry];
+      }
       return { countryCode: 'LOCAL', countryName: 'Local Development Host', flag: '📍', lat: 20.59, lng: 78.96 };
     }
 
     if (cfCountry && cfCountry.length === 2) {
-      return { countryCode: cfCountry, countryName: `Region (${cfCountry})`, flag: '🌐', lat: 20.0, lng: 0.0 };
+      const flag = getFlagEmoji(cfCountry);
+      return { countryCode: cfCountry, countryName: `Region (${cfCountry})`, flag, lat: 20.0, lng: 0.0 };
     }
 
+    // Trigger background IP Geo lookup if public IP
+    this.lookupPublicIpGeo(ip);
+
     return { countryCode: 'IN', countryName: 'India', flag: '🇮🇳', lat: 20.59, lng: 78.96 };
+  }
+
+  private lookupPublicIpGeo(ip: string): void {
+    if (!ip || VisitorIntelligence.geoIpCache.has(ip)) return;
+    VisitorIntelligence.geoIpCache.set(ip, { countryCode: 'IN', countryName: 'India', flag: '🇮🇳', lat: 20.59, lng: 78.96 });
+    try {
+      fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,lat,lon`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data: any) => {
+          if (data && data.status === 'success' && data.countryCode) {
+            const code = data.countryCode.toUpperCase();
+            const flag = getFlagEmoji(code);
+            VisitorIntelligence.geoIpCache.set(ip, {
+              countryCode: code,
+              countryName: data.country || code,
+              flag,
+              lat: data.lat || 20.0,
+              lng: data.lon || 0.0,
+            });
+          }
+        })
+        .catch(() => {});
+    } catch {}
+  }
+
+  public getBlockedCount(): number {
+    return this.blockedIps.size;
   }
 
   public recordHit(ip: string, url: string, headers: Record<string, any>, duration: number): VisitorProfile {

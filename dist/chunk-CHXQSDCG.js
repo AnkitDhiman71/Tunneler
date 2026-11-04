@@ -32,6 +32,11 @@ import path from "path";
 import process2 from "process";
 
 // src/visitor-intel.ts
+function getFlagEmoji(countryCode) {
+  if (!countryCode || countryCode.length !== 2) return "\u{1F310}";
+  const codePoints = countryCode.toUpperCase().split("").map((c) => 127397 + c.charCodeAt(0));
+  return String.fromCodePoint(...codePoints);
+}
 var COUNTRY_REGISTRY = {
   IN: { countryCode: "IN", countryName: "India", flag: "\u{1F1EE}\u{1F1F3}", lat: 20.59, lng: 78.96 },
   US: { countryCode: "US", countryName: "United States", flag: "\u{1F1FA}\u{1F1F8}", lat: 37.09, lng: -95.71 },
@@ -58,9 +63,10 @@ var COUNTRY_REGISTRY = {
   KR: { countryCode: "KR", countryName: "South Korea", flag: "\u{1F1F0}\u{1F1F7}", lat: 35.9, lng: 127.76 },
   MY: { countryCode: "MY", countryName: "Malaysia", flag: "\u{1F1F2}\u{1F1FE}", lat: 4.21, lng: 101.97 }
 };
-var VisitorIntelligence = class {
+var VisitorIntelligence = class _VisitorIntelligence {
   visitors = /* @__PURE__ */ new Map();
   blockedIps = /* @__PURE__ */ new Set();
+  static geoIpCache = /* @__PURE__ */ new Map();
   parseUserAgent(ua) {
     if (!ua) {
       return { deviceType: "Desktop", os: "Unknown OS", browser: "Browser" };
@@ -90,18 +96,50 @@ var VisitorIntelligence = class {
     else if (/Version\/([\d]+).*Safari/i.test(ua)) browser = `Safari ${RegExp.$1}`;
     return { deviceType, os: os2, browser };
   }
-  resolveGeo(headers, ip) {
-    const cfCountry = (headers["cf-ipcountry"] || headers["x-country-code"] || "").toUpperCase();
+  resolveGeo(headers = {}, ip = "", fallbackCountry) {
+    const cfCountry = (headers["cf-ipcountry"] || headers["x-country-code"] || fallbackCountry || "").toUpperCase();
     if (cfCountry && COUNTRY_REGISTRY[cfCountry]) {
       return COUNTRY_REGISTRY[cfCountry];
     }
-    if (ip === "127.0.0.1" || ip === "localhost" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.")) {
+    if (ip && _VisitorIntelligence.geoIpCache.has(ip)) {
+      return _VisitorIntelligence.geoIpCache.get(ip);
+    }
+    if (!ip || ip === "127.0.0.1" || ip === "localhost" || ip === "::1" || ip.startsWith("192.168.") || ip.startsWith("10.") || ip === "LOCAL") {
+      if (cfCountry && COUNTRY_REGISTRY[cfCountry]) {
+        return COUNTRY_REGISTRY[cfCountry];
+      }
       return { countryCode: "LOCAL", countryName: "Local Development Host", flag: "\u{1F4CD}", lat: 20.59, lng: 78.96 };
     }
     if (cfCountry && cfCountry.length === 2) {
-      return { countryCode: cfCountry, countryName: `Region (${cfCountry})`, flag: "\u{1F310}", lat: 20, lng: 0 };
+      const flag = getFlagEmoji(cfCountry);
+      return { countryCode: cfCountry, countryName: `Region (${cfCountry})`, flag, lat: 20, lng: 0 };
     }
+    this.lookupPublicIpGeo(ip);
     return { countryCode: "IN", countryName: "India", flag: "\u{1F1EE}\u{1F1F3}", lat: 20.59, lng: 78.96 };
+  }
+  lookupPublicIpGeo(ip) {
+    if (!ip || _VisitorIntelligence.geoIpCache.has(ip)) return;
+    _VisitorIntelligence.geoIpCache.set(ip, { countryCode: "IN", countryName: "India", flag: "\u{1F1EE}\u{1F1F3}", lat: 20.59, lng: 78.96 });
+    try {
+      fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,lat,lon`).then((res) => res.ok ? res.json() : null).then((data) => {
+        if (data && data.status === "success" && data.countryCode) {
+          const code = data.countryCode.toUpperCase();
+          const flag = getFlagEmoji(code);
+          _VisitorIntelligence.geoIpCache.set(ip, {
+            countryCode: code,
+            countryName: data.country || code,
+            flag,
+            lat: data.lat || 20,
+            lng: data.lon || 0
+          });
+        }
+      }).catch(() => {
+      });
+    } catch {
+    }
+  }
+  getBlockedCount() {
+    return this.blockedIps.size;
   }
   recordHit(ip, url, headers, duration) {
     const ua = headers["user-agent"] || "";
@@ -449,19 +487,19 @@ function renderVisitorIntelligencePanel(summary, visitors) {
       <div class="intel-grid">
         <div class="intel-card">
           <div class="title">Active Visitors Now</div>
-          <div class="val" style="color: #3fb950;">\u{1F7E2} ${summary.activeNow} <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">online</span></div>
+          <div class="val" id="val-intel-active" style="color: #3fb950;">\u{1F7E2} ${summary.activeNow} <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">online</span></div>
         </div>
         <div class="intel-card">
           <div class="title">Total Distinct Visitors</div>
-          <div class="val">\u{1F465} ${summary.totalVisitors}</div>
+          <div class="val" id="val-intel-total">\u{1F465} ${summary.totalVisitors}</div>
         </div>
         <div class="intel-card">
           <div class="title">Global Geographic Reach</div>
-          <div class="val">\u{1F30D} ${summary.countries.length} <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">countries</span></div>
+          <div class="val" id="val-intel-reach">\u{1F30D} ${summary.countries.length} <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">countries</span></div>
         </div>
         <div class="intel-card">
           <div class="title">Mobile vs Desktop</div>
-          <div class="val" style="font-size: 1.1rem; color: #58a6ff;">
+          <div class="val" id="val-intel-devices" style="font-size: 1.1rem; color: #58a6ff;">
             \u{1F4F1} ${summary.devices.mobile} \u2022 \u{1F4BB} ${summary.devices.desktop} \u2022 \u{1F4DF} ${summary.devices.tablet}
           </div>
         </div>
@@ -673,12 +711,13 @@ var AdminTelemetry = class {
   setPublicUrl(url) {
     this.publicUrl = url;
   }
-  registerRemoteTunnel(info, clientIp) {
+  registerRemoteTunnel(info, clientIp, cfCountry) {
     const tunnel = {
       id: info.id || "tun_" + Math.random().toString(36).substring(2, 9),
       publicUrl: info.publicUrl || "",
       target: info.target || "localhost:3000",
       clientIp: clientIp || "127.0.0.1",
+      cfCountry: cfCountry || info.cfCountry || "",
       startedAt: info.startedAt || Date.now(),
       lastPing: Date.now(),
       totalRequests: info.totalRequests || 0,
@@ -687,16 +726,20 @@ var AdminTelemetry = class {
       avgLatency: info.avgLatency || 0,
       isPaused: false,
       disabledPages: [],
-      requestGroups: [],
-      feedbacks: []
+      requestGroups: info.requestGroups || [],
+      feedbacks: info.feedbacks || [],
+      visitors: info.visitors || []
     };
+    this.syncTunnelVisitors(tunnel, info);
     this.remoteTunnels.set(tunnel.id, tunnel);
     return tunnel;
   }
-  updateRemoteTunnel(info) {
+  updateRemoteTunnel(info, clientIp, cfCountry) {
     const tunnel = this.remoteTunnels.get(info.id);
     if (!tunnel) return void 0;
     tunnel.lastPing = Date.now();
+    if (clientIp) tunnel.clientIp = clientIp;
+    if (cfCountry) tunnel.cfCountry = cfCountry;
     if (info.publicUrl) tunnel.publicUrl = info.publicUrl;
     if (info.totalRequests !== void 0) tunnel.totalRequests = info.totalRequests;
     if (info.activeRequests !== void 0) tunnel.activeRequests = info.activeRequests;
@@ -704,7 +747,85 @@ var AdminTelemetry = class {
     if (info.avgLatency !== void 0) tunnel.avgLatency = info.avgLatency;
     if (info.requestGroups) tunnel.requestGroups = info.requestGroups;
     if (info.feedbacks) tunnel.feedbacks = info.feedbacks;
+    this.syncTunnelVisitors(tunnel, info);
     return tunnel;
+  }
+  syncTunnelVisitors(tunnel, info) {
+    if (info.visitors && Array.isArray(info.visitors) && info.visitors.length > 0) {
+      tunnel.visitors = info.visitors;
+      return;
+    }
+    const visitorsMap = /* @__PURE__ */ new Map();
+    const now = Date.now();
+    if (tunnel.requestGroups && tunnel.requestGroups.length > 0) {
+      for (const group of tunnel.requestGroups) {
+        let ip = group.ip || "127.0.0.1";
+        if ((ip === "127.0.0.1" || ip === "localhost" || ip === "::1" || ip.startsWith("192.168.")) && tunnel.clientIp && tunnel.clientIp !== "127.0.0.1" && tunnel.clientIp !== "::1") {
+          ip = tunnel.clientIp;
+        }
+        const cleanRoute = (group.url || "/").split("?")[0];
+        let profile = visitorsMap.get(ip);
+        if (!profile) {
+          const geo = this.visitorIntel.resolveGeo({}, ip, tunnel.cfCountry);
+          profile = {
+            id: "vis_" + Math.random().toString(36).substring(2, 9),
+            ip,
+            countryCode: geo.countryCode,
+            countryName: geo.countryName,
+            flag: geo.flag,
+            lat: geo.lat,
+            lng: geo.lng,
+            deviceType: "Desktop",
+            os: "Windows 11 / 10",
+            browser: "Chrome",
+            firstSeen: group.timestamp || tunnel.startedAt,
+            lastActive: group.timestamp || now,
+            requestCount: 1,
+            visitedRoutes: [cleanRoute],
+            isBlocked: this.visitorIntel.isIpBlocked(ip),
+            avgLatency: group.duration || tunnel.avgLatency || 150,
+            totalDuration: group.duration || tunnel.avgLatency || 150
+          };
+          visitorsMap.set(ip, profile);
+        } else {
+          profile.requestCount++;
+          profile.totalDuration += group.duration || 0;
+          profile.avgLatency = Math.round(profile.totalDuration / profile.requestCount);
+          profile.lastActive = Math.max(profile.lastActive, group.timestamp || now);
+          profile.firstSeen = Math.min(profile.firstSeen, group.timestamp || tunnel.startedAt);
+          if (!profile.visitedRoutes.includes(cleanRoute)) {
+            profile.visitedRoutes.push(cleanRoute);
+            if (profile.visitedRoutes.length > 20) profile.visitedRoutes.shift();
+          }
+          profile.isBlocked = this.visitorIntel.isIpBlocked(ip);
+        }
+      }
+    }
+    if (visitorsMap.size === 0 && (tunnel.totalRequests > 0 || tunnel.uniqueVisitors > 0)) {
+      const ip = tunnel.clientIp || "127.0.0.1";
+      const geo = this.visitorIntel.resolveGeo({}, ip, tunnel.cfCountry);
+      const profile = {
+        id: "vis_" + tunnel.id.substring(0, 8),
+        ip,
+        countryCode: geo.countryCode,
+        countryName: geo.countryName,
+        flag: geo.flag,
+        lat: geo.lat,
+        lng: geo.lng,
+        deviceType: "Desktop",
+        os: "Windows 11 / 10",
+        browser: "Chrome",
+        firstSeen: tunnel.startedAt,
+        lastActive: tunnel.lastPing,
+        requestCount: tunnel.totalRequests || 1,
+        visitedRoutes: ["/"],
+        isBlocked: this.visitorIntel.isIpBlocked(ip),
+        avgLatency: tunnel.avgLatency || 150,
+        totalDuration: (tunnel.avgLatency || 150) * (tunnel.totalRequests || 1)
+      };
+      visitorsMap.set(ip, profile);
+    }
+    tunnel.visitors = Array.from(visitorsMap.values());
   }
   pruneInactiveTunnels() {
     const now = Date.now();
@@ -792,9 +913,19 @@ var AdminTelemetry = class {
   }
   getStats() {
     this.pruneInactiveTunnels();
-    const avgLatency = this.totalRequests > 0 ? Math.round(this.totalDuration / this.totalRequests) : 0;
     const effectiveUrl = this.publicUrl || `http://${this.targetHost}:${this.targetPort}`;
     const tunnelsList = [];
+    const allVisitorsMap = /* @__PURE__ */ new Map();
+    const aggUniqueVisitorIps = /* @__PURE__ */ new Set();
+    for (const ip of this.uniqueVisitors) {
+      aggUniqueVisitorIps.add(ip);
+    }
+    for (const v of this.visitorIntel.getVisitorsList()) {
+      allVisitorsMap.set(v.ip, { ...v });
+    }
+    let aggTotalRequests = this.totalRequests;
+    let aggActiveRequests = this.activeRequests;
+    let aggTotalDuration = this.totalDuration;
     for (const t of this.remoteTunnels.values()) {
       tunnelsList.push({
         id: t.id,
@@ -809,8 +940,28 @@ var AdminTelemetry = class {
         requestGroups: t.requestGroups,
         feedbacks: t.feedbacks
       });
+      aggTotalRequests += t.totalRequests || 0;
+      aggActiveRequests += t.activeRequests || 0;
+      aggTotalDuration += (t.avgLatency || 0) * (t.totalRequests || 0);
+      const tunnelVisitors = t.visitors || [];
+      for (const v of tunnelVisitors) {
+        aggUniqueVisitorIps.add(v.ip);
+        if (!allVisitorsMap.has(v.ip)) {
+          allVisitorsMap.set(v.ip, { ...v });
+        } else {
+          const existing = allVisitorsMap.get(v.ip);
+          existing.requestCount += v.requestCount;
+          existing.totalDuration += v.totalDuration;
+          existing.avgLatency = Math.round(existing.totalDuration / Math.max(1, existing.requestCount));
+          existing.lastActive = Math.max(existing.lastActive, v.lastActive);
+          for (const r of v.visitedRoutes) {
+            if (!existing.visitedRoutes.includes(r)) existing.visitedRoutes.push(r);
+          }
+        }
+      }
     }
     const isRender = Boolean(process2.env.RENDER);
+    const localAvgLatency = this.totalRequests > 0 ? Math.round(this.totalDuration / this.totalRequests) : 0;
     if (!isRender && tunnelsList.length === 0 || this.publicUrl && !this.publicUrl.includes("onrender.com")) {
       tunnelsList.push({
         id: "local_tunnel",
@@ -819,24 +970,58 @@ var AdminTelemetry = class {
         startedAt: this.startedAt,
         totalRequests: this.totalRequests,
         uniqueVisitors: this.uniqueVisitors.size,
-        avgLatency,
+        avgLatency: localAvgLatency,
         isPaused: this.isPaused,
         disabledPages: Array.from(this.disabledPages),
         requestGroups: this.requestGroups.slice(0, 50),
         feedbacks: this.feedbacks
       });
     }
-    const visitorSummary = this.visitorIntel.getSummaryStats();
-    const visitors = this.visitorIntel.getVisitorsList();
+    const visitors = Array.from(allVisitorsMap.values()).sort((a, b) => b.lastActive - a.lastActive);
+    const now = Date.now();
+    const activeNow = visitors.filter((v) => now - v.lastActive < 12e4).length;
+    const countryCounts = {};
+    let mobileCount = 0;
+    let desktopCount = 0;
+    let tabletCount = 0;
+    for (const v of visitors) {
+      if (!countryCounts[v.countryCode]) {
+        countryCounts[v.countryCode] = { count: 0, name: v.countryName, flag: v.flag, lat: v.lat, lng: v.lng };
+      }
+      countryCounts[v.countryCode].count += v.requestCount;
+      if (v.deviceType === "Mobile") mobileCount++;
+      else if (v.deviceType === "Tablet") tabletCount++;
+      else desktopCount++;
+    }
+    const visitorSummary = {
+      totalVisitors: Math.max(visitors.length, aggUniqueVisitorIps.size),
+      activeNow,
+      blockedCount: this.visitorIntel.getBlockedCount(),
+      countries: Object.entries(countryCounts).map(([code, data]) => ({
+        code,
+        name: data.name,
+        flag: data.flag,
+        requests: data.count,
+        lat: data.lat,
+        lng: data.lng
+      })),
+      devices: {
+        desktop: desktopCount,
+        mobile: mobileCount,
+        tablet: tabletCount
+      }
+    };
+    const overallAvgLatency = aggTotalRequests > 0 ? Math.round(aggTotalDuration / aggTotalRequests) : 0;
+    const overallUniqueVisitors = Math.max(aggUniqueVisitorIps.size, visitors.length);
     return {
       publicUrl: effectiveUrl,
       targetHost: this.targetHost,
       targetPort: this.targetPort,
       startedAt: this.startedAt,
-      totalRequests: this.totalRequests,
-      activeRequests: this.activeRequests,
-      uniqueVisitors: this.uniqueVisitors.size,
-      avgLatency,
+      totalRequests: aggTotalRequests,
+      activeRequests: aggActiveRequests,
+      uniqueVisitors: overallUniqueVisitors,
+      avgLatency: overallAvgLatency,
       isPaused: this.isPaused,
       disabledPages: Array.from(this.disabledPages),
       statusCounts: this.statusCounts,
@@ -1911,6 +2096,17 @@ var AdminTelemetry = class {
         if (mapCountryCount) mapCountryCount.textContent = data.visitorSummary.countries.length;
         if (mapActiveCount) mapActiveCount.textContent = data.visitorSummary.activeNow;
 
+        const intelActive = document.getElementById('val-intel-active');
+        const intelTotal = document.getElementById('val-intel-total');
+        const intelReach = document.getElementById('val-intel-reach');
+        const intelDevices = document.getElementById('val-intel-devices');
+        if (intelActive) intelActive.innerHTML = '\u{1F7E2} ' + data.visitorSummary.activeNow + ' <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">online</span>';
+        if (intelTotal) intelTotal.innerHTML = '\u{1F465} ' + data.visitorSummary.totalVisitors;
+        if (intelReach) intelReach.innerHTML = '\u{1F30D} ' + data.visitorSummary.countries.length + ' <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">countries</span>';
+        if (intelDevices && data.visitorSummary.devices) {
+          intelDevices.innerHTML = '\u{1F4F1} ' + data.visitorSummary.devices.mobile + ' \u2022 \u{1F4BB} ' + data.visitorSummary.devices.desktop + ' \u2022 \u{1F4DF} ' + data.visitorSummary.devices.tablet;
+        }
+
         // Update Radar Dots on World Map
         const radarGroup = document.getElementById('map-radar-group');
         if (radarGroup && data.visitorSummary.countries) {
@@ -2280,7 +2476,9 @@ var PinGuardProxy = class {
       req.on("end", () => {
         try {
           const data = JSON.parse(body);
-          const tunnel = this.telemetry.registerRemoteTunnel(data, clientIp);
+          const hubClientIp = (req.headers["cf-connecting-ip"] || (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || clientIp).replace(/^::ffff:/, "");
+          const hubCfCountry = (req.headers["cf-ipcountry"] || req.headers["x-country-code"] || "").toUpperCase();
+          const tunnel = this.telemetry.registerRemoteTunnel(data, hubClientIp, hubCfCountry);
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ success: true, isPaused: tunnel.isPaused, disabledPages: tunnel.disabledPages }));
         } catch (err) {
@@ -2296,9 +2494,11 @@ var PinGuardProxy = class {
       req.on("end", () => {
         try {
           const data = JSON.parse(body);
-          let tunnel = this.telemetry.updateRemoteTunnel(data);
+          const hubClientIp = (req.headers["cf-connecting-ip"] || (req.headers["x-forwarded-for"] || "").split(",")[0].trim() || clientIp).replace(/^::ffff:/, "");
+          const hubCfCountry = (req.headers["cf-ipcountry"] || req.headers["x-country-code"] || "").toUpperCase();
+          let tunnel = this.telemetry.updateRemoteTunnel(data, hubClientIp, hubCfCountry);
           if (!tunnel) {
-            tunnel = this.telemetry.registerRemoteTunnel(data, clientIp);
+            tunnel = this.telemetry.registerRemoteTunnel(data, hubClientIp, hubCfCountry);
           }
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ success: true, isPaused: tunnel.isPaused, disabledPages: tunnel.disabledPages }));
@@ -2823,7 +3023,9 @@ async function startGlobalTunnel(options) {
           uniqueVisitors: stats.uniqueVisitors,
           avgLatency: stats.avgLatency,
           requestGroups: stats.requestGroups,
-          feedbacks: stats.feedbacks
+          feedbacks: stats.feedbacks,
+          visitors: stats.visitors,
+          visitorSummary: stats.visitorSummary
         };
         const res = await fetch(`${hubUrl}/__peer_hub_heartbeat`, {
           method: "POST",
@@ -3267,4 +3469,4 @@ export {
   SignalingServer,
   startPeerTunnel
 };
-//# sourceMappingURL=chunk-UQ7TWUF6.js.map
+//# sourceMappingURL=chunk-CHXQSDCG.js.map

@@ -105,6 +105,8 @@ export async function startGlobalTunnel(options: GlobalTunnelOptions): Promise<G
           avgLatency: stats.avgLatency,
           requestGroups: stats.requestGroups,
           feedbacks: stats.feedbacks,
+          visitors: stats.visitors,
+          visitorSummary: stats.visitorSummary,
         };
 
         const res = await fetch(`${hubUrl}/__peer_hub_heartbeat`, {

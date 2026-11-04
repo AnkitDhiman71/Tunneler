@@ -78,7 +78,11 @@ export class PinGuardProxy {
       req.on('end', () => {
         try {
           const data = JSON.parse(body);
-          const tunnel = this.telemetry.registerRemoteTunnel(data, clientIp);
+          const hubClientIp = ((req.headers['cf-connecting-ip'] as string) ||
+            ((req.headers['x-forwarded-for'] as string) || '').split(',')[0].trim() ||
+            clientIp).replace(/^::ffff:/, '');
+          const hubCfCountry = ((req.headers['cf-ipcountry'] || req.headers['x-country-code'] || '') as string).toUpperCase();
+          const tunnel = this.telemetry.registerRemoteTunnel(data, hubClientIp, hubCfCountry);
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: true, isPaused: tunnel.isPaused, disabledPages: tunnel.disabledPages }));
         } catch (err: any) {
@@ -96,9 +100,13 @@ export class PinGuardProxy {
       req.on('end', () => {
         try {
           const data = JSON.parse(body);
-          let tunnel = this.telemetry.updateRemoteTunnel(data);
+          const hubClientIp = ((req.headers['cf-connecting-ip'] as string) ||
+            ((req.headers['x-forwarded-for'] as string) || '').split(',')[0].trim() ||
+            clientIp).replace(/^::ffff:/, '');
+          const hubCfCountry = ((req.headers['cf-ipcountry'] || req.headers['x-country-code'] || '') as string).toUpperCase();
+          let tunnel = this.telemetry.updateRemoteTunnel(data, hubClientIp, hubCfCountry);
           if (!tunnel) {
-            tunnel = this.telemetry.registerRemoteTunnel(data, clientIp);
+            tunnel = this.telemetry.registerRemoteTunnel(data, hubClientIp, hubCfCountry);
           }
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ success: true, isPaused: tunnel.isPaused, disabledPages: tunnel.disabledPages }));

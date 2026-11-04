@@ -75,6 +75,7 @@ export interface RemoteTunnelInfo {
   publicUrl: string;
   target: string;
   clientIp: string;
+  cfCountry?: string;
   startedAt: number;
   lastPing: number;
   totalRequests: number;
@@ -85,6 +86,7 @@ export interface RemoteTunnelInfo {
   disabledPages: string[];
   requestGroups: ParentRequestGroup[];
   feedbacks: FeedbackItem[];
+  visitors?: VisitorProfile[];
 }
 
 export class AdminTelemetry {
@@ -131,12 +133,13 @@ export class AdminTelemetry {
     this.publicUrl = url;
   }
 
-  public registerRemoteTunnel(info: any, clientIp: string): RemoteTunnelInfo {
+  public registerRemoteTunnel(info: any, clientIp: string, cfCountry?: string): RemoteTunnelInfo {
     const tunnel: RemoteTunnelInfo = {
       id: info.id || 'tun_' + Math.random().toString(36).substring(2, 9),
       publicUrl: info.publicUrl || '',
       target: info.target || 'localhost:3000',
       clientIp: clientIp || '127.0.0.1',
+      cfCountry: cfCountry || info.cfCountry || '',
       startedAt: info.startedAt || Date.now(),
       lastPing: Date.now(),
       totalRequests: info.totalRequests || 0,
@@ -145,17 +148,21 @@ export class AdminTelemetry {
       avgLatency: info.avgLatency || 0,
       isPaused: false,
       disabledPages: [],
-      requestGroups: [],
-      feedbacks: [],
+      requestGroups: info.requestGroups || [],
+      feedbacks: info.feedbacks || [],
+      visitors: info.visitors || [],
     };
+    this.syncTunnelVisitors(tunnel, info);
     this.remoteTunnels.set(tunnel.id, tunnel);
     return tunnel;
   }
 
-  public updateRemoteTunnel(info: any): RemoteTunnelInfo | undefined {
+  public updateRemoteTunnel(info: any, clientIp?: string, cfCountry?: string): RemoteTunnelInfo | undefined {
     const tunnel = this.remoteTunnels.get(info.id);
     if (!tunnel) return undefined;
     tunnel.lastPing = Date.now();
+    if (clientIp) tunnel.clientIp = clientIp;
+    if (cfCountry) tunnel.cfCountry = cfCountry;
     if (info.publicUrl) tunnel.publicUrl = info.publicUrl;
     if (info.totalRequests !== undefined) tunnel.totalRequests = info.totalRequests;
     if (info.activeRequests !== undefined) tunnel.activeRequests = info.activeRequests;
@@ -163,7 +170,93 @@ export class AdminTelemetry {
     if (info.avgLatency !== undefined) tunnel.avgLatency = info.avgLatency;
     if (info.requestGroups) tunnel.requestGroups = info.requestGroups;
     if (info.feedbacks) tunnel.feedbacks = info.feedbacks;
+    this.syncTunnelVisitors(tunnel, info);
     return tunnel;
+  }
+
+  private syncTunnelVisitors(tunnel: RemoteTunnelInfo, info: any): void {
+    if (info.visitors && Array.isArray(info.visitors) && info.visitors.length > 0) {
+      tunnel.visitors = info.visitors;
+      return;
+    }
+
+    // Fallback Visitor Synthesis for older CLI versions (1.0.4/1.0.5)
+    const visitorsMap = new Map<string, VisitorProfile>();
+    const now = Date.now();
+
+    if (tunnel.requestGroups && tunnel.requestGroups.length > 0) {
+      for (const group of tunnel.requestGroups) {
+        let ip = group.ip || '127.0.0.1';
+        if ((ip === '127.0.0.1' || ip === 'localhost' || ip === '::1' || ip.startsWith('192.168.')) &&
+            tunnel.clientIp && tunnel.clientIp !== '127.0.0.1' && tunnel.clientIp !== '::1') {
+          ip = tunnel.clientIp;
+        }
+
+        const cleanRoute = (group.url || '/').split('?')[0];
+        let profile = visitorsMap.get(ip);
+        if (!profile) {
+          const geo = this.visitorIntel.resolveGeo({}, ip, tunnel.cfCountry);
+          profile = {
+            id: 'vis_' + Math.random().toString(36).substring(2, 9),
+            ip,
+            countryCode: geo.countryCode,
+            countryName: geo.countryName,
+            flag: geo.flag,
+            lat: geo.lat,
+            lng: geo.lng,
+            deviceType: 'Desktop',
+            os: 'Windows 11 / 10',
+            browser: 'Chrome',
+            firstSeen: group.timestamp || tunnel.startedAt,
+            lastActive: group.timestamp || now,
+            requestCount: 1,
+            visitedRoutes: [cleanRoute],
+            isBlocked: this.visitorIntel.isIpBlocked(ip),
+            avgLatency: group.duration || tunnel.avgLatency || 150,
+            totalDuration: group.duration || tunnel.avgLatency || 150,
+          };
+          visitorsMap.set(ip, profile);
+        } else {
+          profile.requestCount++;
+          profile.totalDuration += (group.duration || 0);
+          profile.avgLatency = Math.round(profile.totalDuration / profile.requestCount);
+          profile.lastActive = Math.max(profile.lastActive, group.timestamp || now);
+          profile.firstSeen = Math.min(profile.firstSeen, group.timestamp || tunnel.startedAt);
+          if (!profile.visitedRoutes.includes(cleanRoute)) {
+            profile.visitedRoutes.push(cleanRoute);
+            if (profile.visitedRoutes.length > 20) profile.visitedRoutes.shift();
+          }
+          profile.isBlocked = this.visitorIntel.isIpBlocked(ip);
+        }
+      }
+    }
+
+    if (visitorsMap.size === 0 && (tunnel.totalRequests > 0 || tunnel.uniqueVisitors > 0)) {
+      const ip = tunnel.clientIp || '127.0.0.1';
+      const geo = this.visitorIntel.resolveGeo({}, ip, tunnel.cfCountry);
+      const profile: VisitorProfile = {
+        id: 'vis_' + tunnel.id.substring(0, 8),
+        ip,
+        countryCode: geo.countryCode,
+        countryName: geo.countryName,
+        flag: geo.flag,
+        lat: geo.lat,
+        lng: geo.lng,
+        deviceType: 'Desktop',
+        os: 'Windows 11 / 10',
+        browser: 'Chrome',
+        firstSeen: tunnel.startedAt,
+        lastActive: tunnel.lastPing,
+        requestCount: tunnel.totalRequests || 1,
+        visitedRoutes: ['/'],
+        isBlocked: this.visitorIntel.isIpBlocked(ip),
+        avgLatency: tunnel.avgLatency || 150,
+        totalDuration: (tunnel.avgLatency || 150) * (tunnel.totalRequests || 1),
+      };
+      visitorsMap.set(ip, profile);
+    }
+
+    tunnel.visitors = Array.from(visitorsMap.values());
   }
 
   public pruneInactiveTunnels(): void {
@@ -269,7 +362,6 @@ export class AdminTelemetry {
 
   public getStats() {
     this.pruneInactiveTunnels();
-    const avgLatency = this.totalRequests > 0 ? Math.round(this.totalDuration / this.totalRequests) : 0;
     const effectiveUrl = this.publicUrl || `http://${this.targetHost}:${this.targetPort}`;
 
     const tunnelsList: Array<{
@@ -286,6 +378,21 @@ export class AdminTelemetry {
       feedbacks: FeedbackItem[];
     }> = [];
 
+    // Map to aggregate all visitors across local and remote tunnels
+    const allVisitorsMap = new Map<string, VisitorProfile>();
+    const aggUniqueVisitorIps = new Set<string>();
+
+    for (const ip of this.uniqueVisitors) {
+      aggUniqueVisitorIps.add(ip);
+    }
+    for (const v of this.visitorIntel.getVisitorsList()) {
+      allVisitorsMap.set(v.ip, { ...v });
+    }
+
+    let aggTotalRequests = this.totalRequests;
+    let aggActiveRequests = this.activeRequests;
+    let aggTotalDuration = this.totalDuration;
+
     // Add remote user tunnels first
     for (const t of this.remoteTunnels.values()) {
       tunnelsList.push({
@@ -301,10 +408,33 @@ export class AdminTelemetry {
         requestGroups: t.requestGroups,
         feedbacks: t.feedbacks,
       });
+
+      aggTotalRequests += (t.totalRequests || 0);
+      aggActiveRequests += (t.activeRequests || 0);
+      aggTotalDuration += (t.avgLatency || 0) * (t.totalRequests || 0);
+
+      // Merge remote tunnel visitors
+      const tunnelVisitors = t.visitors || [];
+      for (const v of tunnelVisitors) {
+        aggUniqueVisitorIps.add(v.ip);
+        if (!allVisitorsMap.has(v.ip)) {
+          allVisitorsMap.set(v.ip, { ...v });
+        } else {
+          const existing = allVisitorsMap.get(v.ip)!;
+          existing.requestCount += v.requestCount;
+          existing.totalDuration += v.totalDuration;
+          existing.avgLatency = Math.round(existing.totalDuration / Math.max(1, existing.requestCount));
+          existing.lastActive = Math.max(existing.lastActive, v.lastActive);
+          for (const r of v.visitedRoutes) {
+            if (!existing.visitedRoutes.includes(r)) existing.visitedRoutes.push(r);
+          }
+        }
+      }
     }
 
     // Include local tunnel if active (has publicUrl) or running locally without remote tunnels
     const isRender = Boolean(process.env.RENDER);
+    const localAvgLatency = this.totalRequests > 0 ? Math.round(this.totalDuration / this.totalRequests) : 0;
     if ((!isRender && tunnelsList.length === 0) || (this.publicUrl && !this.publicUrl.includes('onrender.com'))) {
       tunnelsList.push({
         id: 'local_tunnel',
@@ -313,7 +443,7 @@ export class AdminTelemetry {
         startedAt: this.startedAt,
         totalRequests: this.totalRequests,
         uniqueVisitors: this.uniqueVisitors.size,
-        avgLatency,
+        avgLatency: localAvgLatency,
         isPaused: this.isPaused,
         disabledPages: Array.from(this.disabledPages),
         requestGroups: this.requestGroups.slice(0, 50),
@@ -321,18 +451,57 @@ export class AdminTelemetry {
       });
     }
 
-    const visitorSummary = this.visitorIntel.getSummaryStats();
-    const visitors = this.visitorIntel.getVisitorsList();
+    const visitors = Array.from(allVisitorsMap.values()).sort((a, b) => b.lastActive - a.lastActive);
+    const now = Date.now();
+    const activeNow = visitors.filter((v) => now - v.lastActive < 120000).length;
+
+    const countryCounts: Record<string, { count: number; name: string; flag: string; lat: number; lng: number }> = {};
+    let mobileCount = 0;
+    let desktopCount = 0;
+    let tabletCount = 0;
+
+    for (const v of visitors) {
+      if (!countryCounts[v.countryCode]) {
+        countryCounts[v.countryCode] = { count: 0, name: v.countryName, flag: v.flag, lat: v.lat, lng: v.lng };
+      }
+      countryCounts[v.countryCode].count += v.requestCount;
+
+      if (v.deviceType === 'Mobile') mobileCount++;
+      else if (v.deviceType === 'Tablet') tabletCount++;
+      else desktopCount++;
+    }
+
+    const visitorSummary = {
+      totalVisitors: Math.max(visitors.length, aggUniqueVisitorIps.size),
+      activeNow,
+      blockedCount: this.visitorIntel.getBlockedCount(),
+      countries: Object.entries(countryCounts).map(([code, data]) => ({
+        code,
+        name: data.name,
+        flag: data.flag,
+        requests: data.count,
+        lat: data.lat,
+        lng: data.lng,
+      })),
+      devices: {
+        desktop: desktopCount,
+        mobile: mobileCount,
+        tablet: tabletCount,
+      },
+    };
+
+    const overallAvgLatency = aggTotalRequests > 0 ? Math.round(aggTotalDuration / aggTotalRequests) : 0;
+    const overallUniqueVisitors = Math.max(aggUniqueVisitorIps.size, visitors.length);
 
     return {
       publicUrl: effectiveUrl,
       targetHost: this.targetHost,
       targetPort: this.targetPort,
       startedAt: this.startedAt,
-      totalRequests: this.totalRequests,
-      activeRequests: this.activeRequests,
-      uniqueVisitors: this.uniqueVisitors.size,
-      avgLatency,
+      totalRequests: aggTotalRequests,
+      activeRequests: aggActiveRequests,
+      uniqueVisitors: overallUniqueVisitors,
+      avgLatency: overallAvgLatency,
       isPaused: this.isPaused,
       disabledPages: Array.from(this.disabledPages),
       statusCounts: this.statusCounts,
@@ -1439,6 +1608,17 @@ export class AdminTelemetry {
         if (cntVisitors) cntVisitors.textContent = data.visitorSummary.totalVisitors;
         if (mapCountryCount) mapCountryCount.textContent = data.visitorSummary.countries.length;
         if (mapActiveCount) mapActiveCount.textContent = data.visitorSummary.activeNow;
+
+        const intelActive = document.getElementById('val-intel-active');
+        const intelTotal = document.getElementById('val-intel-total');
+        const intelReach = document.getElementById('val-intel-reach');
+        const intelDevices = document.getElementById('val-intel-devices');
+        if (intelActive) intelActive.innerHTML = '🟢 ' + data.visitorSummary.activeNow + ' <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">online</span>';
+        if (intelTotal) intelTotal.innerHTML = '👥 ' + data.visitorSummary.totalVisitors;
+        if (intelReach) intelReach.innerHTML = '🌍 ' + data.visitorSummary.countries.length + ' <span style="font-size: 0.85rem; font-weight: normal; color: #8b949e;">countries</span>';
+        if (intelDevices && data.visitorSummary.devices) {
+          intelDevices.innerHTML = '📱 ' + data.visitorSummary.devices.mobile + ' • 💻 ' + data.visitorSummary.devices.desktop + ' • 📟 ' + data.visitorSummary.devices.tablet;
+        }
 
         // Update Radar Dots on World Map
         const radarGroup = document.getElementById('map-radar-group');
