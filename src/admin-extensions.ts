@@ -2,74 +2,210 @@ import type { VisitorProfile } from './visitor-intel.js';
 
 export function renderWorldMapStyles(): string {
   return `
-    /* WORLD MAP & RADAR STYLES */
+    /* MODERN SATELLITE RADAR MAP STYLES */
     .map-container {
-      background: radial-gradient(circle at 50% 50%, #161b22, #090d13 90%);
+      background: #0d1117;
       border: 1px solid rgba(240, 246, 252, 0.15);
-      border-radius: 12px;
-      padding: 1.5rem;
+      border-radius: 14px;
+      padding: 1.25rem;
       position: relative;
-      overflow: hidden;
       margin-bottom: 1.5rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
     .map-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 1rem;
+      margin-bottom: 0.9rem;
+      flex-wrap: wrap;
+      gap: 10px;
     }
-    .map-header h3 { font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
-    .map-header .map-stats { display: flex; gap: 15px; font-size: 0.85rem; color: #8b949e; }
-    .map-header .map-stats span { color: #58a6ff; font-weight: 600; }
-
+    .map-header h3 { font-size: 1.15rem; display: flex; align-items: center; gap: 8px; color: #fff; }
+    .map-controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .map-stats { display: flex; gap: 15px; font-size: 0.85rem; color: #8b949e; align-items: center; }
+    .map-stats span { color: #58a6ff; font-weight: 600; }
+    .map-layer-selector {
+      display: flex;
+      background: rgba(22, 27, 34, 0.9);
+      border: 1px solid rgba(240, 246, 252, 0.15);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .map-layer-btn {
+      background: transparent;
+      border: none;
+      color: #8b949e;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s;
+    }
+    .map-layer-btn.active {
+      background: #238636;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(35, 134, 54, 0.4);
+    }
+    .map-reset-btn {
+      background: rgba(88, 166, 255, 0.15);
+      border: 1px solid rgba(88, 166, 255, 0.3);
+      color: #58a6ff;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+    .map-reset-btn:hover {
+      background: #58a6ff;
+      color: #0d1117;
+    }
     .map-wrapper {
       position: relative;
       width: 100%;
-      height: 380px;
-      background: #0d1117;
+      height: 520px;
+      background: #040608;
       border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       overflow: hidden;
+      z-index: 1;
     }
-    .world-svg {
+    #leaflet-satellite-map {
       width: 100%;
       height: 100%;
-      display: block;
+      background: #06090e;
     }
 
-    /* RADAR PULSING DOTS */
-    .radar-dot {
+    /* CUSTOM RADAR BEACON PIN */
+    .leaflet-radar-divicon {
+      background: transparent !important;
+      border: none !important;
+    }
+    .radar-beacon {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
-      transform-origin: center;
+    }
+    .radar-beacon-ring {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2px solid #58a6ff;
+      box-shadow: 0 0 15px #58a6ff;
+      animation: beaconWave 2s infinite ease-out;
+      pointer-events: none;
+    }
+    .radar-beacon-ring-2 {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2px solid #3fb950;
+      box-shadow: 0 0 20px #3fb950;
+      animation: beaconWave 2s infinite ease-out 1s;
+      pointer-events: none;
+    }
+    @keyframes beaconWave {
+      0% { transform: scale(0.3); opacity: 1; }
+      100% { transform: scale(2.8); opacity: 0; }
+    }
+    .radar-beacon-core {
+      position: relative;
+      width: 26px;
+      height: 26px;
+      background: rgba(13, 17, 23, 0.95);
+      border: 2px solid #58a6ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      box-shadow: 0 0 12px rgba(88, 166, 255, 0.8);
       transition: transform 0.2s;
     }
-    .radar-dot:hover {
-      transform: scale(1.5);
-    }
-    .radar-ring {
-      animation: pulseRadar 2.5s infinite ease-out;
-      transform-origin: center;
-    }
-    @keyframes pulseRadar {
-      0% { r: 5; opacity: 0.9; stroke-width: 2; }
-      100% { r: 24; opacity: 0; stroke-width: 0.5; }
+    .radar-beacon:hover .radar-beacon-core {
+      transform: scale(1.4);
+      border-color: #3fb950;
     }
 
-    /* MAP TOOLTIP */
-    .map-tooltip {
-      position: absolute;
-      display: none;
-      background: rgba(22, 27, 34, 0.95);
-      border: 1px solid #58a6ff;
-      border-radius: 8px;
-      padding: 8px 12px;
+    /* LEAFLET DARK THEME POPUPS */
+    .leaflet-popup-content-wrapper {
+      background: rgba(13, 17, 23, 0.96) !important;
+      border: 1px solid rgba(88, 166, 255, 0.4) !important;
+      border-radius: 12px !important;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8) !important;
+      backdrop-filter: blur(10px) !important;
+      color: #e6edf3 !important;
+      padding: 0 !important;
+    }
+    .leaflet-popup-tip {
+      background: #0d1117 !important;
+    }
+    .leaflet-popup-content {
+      margin: 12px 16px !important;
+      line-height: 1.4 !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    }
+    .map-popup-card {
+      font-size: 0.85rem;
+    }
+    .map-popup-title {
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid rgba(240, 246, 252, 0.1);
+      padding-bottom: 6px;
+    }
+    .map-popup-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 4px 0;
+      color: #8b949e;
       font-size: 0.8rem;
+      gap: 12px;
+    }
+    .map-popup-val {
       color: #fff;
-      pointer-events: none;
-      z-index: 100;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.6);
-      backdrop-filter: blur(8px);
-      white-space: nowrap;
+      font-weight: 600;
+    }
+    .leaflet-control-zoom a {
+      background: #161b22 !important;
+      color: #e6edf3 !important;
+      border: 1px solid rgba(240, 246, 252, 0.15) !important;
+    }
+    .leaflet-control-zoom a:hover {
+      background: #21262d !important;
+      color: #58a6ff !important;
+    }
+    .leaflet-control-attribution {
+      background: rgba(13, 17, 23, 0.7) !important;
+      color: #8b949e !important;
+      font-size: 0.65rem !important;
+    }
+    .leaflet-control-attribution a {
+      color: #58a6ff !important;
     }
 
     /* VISITOR STATS CARDS */
@@ -171,6 +307,31 @@ export function renderWorldMapStyles(): string {
     }
     .audit-item .status { font-size: 0.85rem; font-weight: 600; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
     .audit-item .desc { font-size: 0.75rem; color: #8b949e; line-height: 1.3; }
+  `;
+}
+
+export function renderSatelliteMapContainer(summary: { countries: any[]; activeNow: number }): string {
+  return `
+    <div class="map-container">
+      <div class="map-header">
+        <h3>🛰️ Real-Time Global Visitor Radar</h3>
+        <div class="map-controls-bar">
+          <div class="map-layer-selector">
+            <button class="map-layer-btn active" id="btn-layer-sat" onclick="switchMapLayer('satellite')">🛰️ Satellite</button>
+            <button class="map-layer-btn" id="btn-layer-dark" onclick="switchMapLayer('dark')">🌌 Cyber Dark</button>
+            <button class="map-layer-btn" id="btn-layer-streets" onclick="switchMapLayer('streets')">🗺️ Streets</button>
+          </div>
+          <button class="map-reset-btn" onclick="resetMapView()" title="Reset to global overview">🌍 Overview</button>
+          <div class="map-stats">
+            <div>Countries: <span id="map-country-count">${summary.countries.length}</span></div>
+            <div>Online: <span id="map-active-count">${summary.activeNow}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="map-wrapper" id="world-map-wrap">
+        <div id="leaflet-satellite-map"></div>
+      </div>
+    </div>
   `;
 }
 

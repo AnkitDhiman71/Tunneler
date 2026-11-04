@@ -5,6 +5,7 @@ import { VisitorIntelligence, type VisitorProfile } from './visitor-intel.js';
 import {
   renderWorldMapStyles,
   renderVectorWorldMapSvg,
+  renderSatelliteMapContainer,
   renderVisitorIntelligencePanel,
   renderApiLaboratoryPanel,
 } from './admin-extensions.js';
@@ -558,6 +559,8 @@ export class AdminTelemetry {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>⚡ peer-port — Executive Admin Center</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body {
@@ -1002,19 +1005,7 @@ export class AdminTelemetry {
 
     <!-- TAB: WORLD RADAR MAP -->
     <div class="panel" id="panel-map" style="display: none;">
-      <div class="map-container">
-        <div class="map-header">
-          <h3>🗺️ Real-Time Global Visitor Radar</h3>
-          <div class="map-stats">
-            <div>Countries: <span id="map-country-count">${stats.visitorSummary.countries.length}</span></div>
-            <div>Online: <span id="map-active-count">${stats.visitorSummary.activeNow}</span></div>
-          </div>
-        </div>
-        <div class="map-wrapper" id="world-map-wrap">
-          ${renderVectorWorldMapSvg(stats.visitorSummary.countries)}
-          <div id="map-tooltip" class="map-tooltip"></div>
-        </div>
-      </div>
+      ${renderSatelliteMapContainer(stats.visitorSummary)}
     </div>
 
     <!-- TAB: VISITOR INTELLIGENCE -->
@@ -1221,6 +1212,142 @@ export class AdminTelemetry {
     let currentStats = ${JSON.stringify(stats)};
     let activeModalTunnelId = 'local_tunnel';
 
+    let leafletMap = null;
+    let leafletLayers = {};
+    let activeLayerName = 'satellite';
+    let visitorMarkersGroup = null;
+
+    function initLeafletSatelliteMap() {
+      if (leafletMap || typeof L === 'undefined') {
+        if (leafletMap) setTimeout(() => leafletMap.invalidateSize(), 80);
+        return;
+      }
+      const mapContainer = document.getElementById('leaflet-satellite-map');
+      if (!mapContainer) return;
+
+      try {
+        // 1. ESRI High-Resolution Photorealistic Satellite Imagery Layer
+        const satLayer = L.tileLayer(
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          {
+            attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics',
+            maxZoom: 18,
+          }
+        );
+
+        // Labels overlay for Satellite so borders and cities are crystal clear
+        const labelsLayer = L.tileLayer(
+          'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+          {
+            maxZoom: 18,
+            opacity: 0.9,
+          }
+        );
+        const satGroup = L.layerGroup([satLayer, labelsLayer]);
+
+        // 2. CartoDB Dark Matter Cyber Radar Layer
+        const darkLayer = L.tileLayer(
+          'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+          {
+            attribution: '&copy; CartoDB',
+            subdomains: 'abcd',
+            maxZoom: 19,
+          }
+        );
+
+        // 3. OpenStreetMap Streets Layer
+        const streetLayer = L.tileLayer(
+          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19,
+          }
+        );
+
+        leafletLayers = {
+          satellite: satGroup,
+          dark: darkLayer,
+          streets: streetLayer,
+        };
+
+        leafletMap = L.map('leaflet-satellite-map', {
+          center: [20.59, 78.96],
+          zoom: 3,
+          minZoom: 2,
+          maxZoom: 18,
+          layers: [satGroup],
+          zoomControl: true,
+          worldCopyJump: true,
+        });
+
+        visitorMarkersGroup = L.layerGroup().addTo(leafletMap);
+        window.leafletMap = leafletMap;
+
+        if (currentStats && currentStats.visitorSummary) {
+          updateMapMarkers(currentStats.visitorSummary.countries, currentStats.visitors);
+        }
+      } catch (e) {
+        console.error('Leaflet initialization error:', e);
+      }
+    }
+
+    function switchMapLayer(layerName) {
+      if (!leafletMap || !leafletLayers[layerName]) return;
+      document.querySelectorAll('.map-layer-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById('btn-layer-' + (layerName === 'satellite' ? 'sat' : layerName));
+      if (activeBtn) activeBtn.classList.add('active');
+
+      Object.values(leafletLayers).forEach(layer => leafletMap.removeLayer(layer));
+      leafletMap.addLayer(leafletLayers[layerName]);
+      activeLayerName = layerName;
+    }
+
+    function resetMapView() {
+      if (!leafletMap) return;
+      leafletMap.setView([20.59, 78.96], 3, { animate: true });
+    }
+
+    function updateMapMarkers(countries, visitors) {
+      if (!leafletMap || !visitorMarkersGroup) return;
+      visitorMarkersGroup.clearLayers();
+
+      const list = countries || [];
+      const visList = visitors || [];
+
+      list.forEach(c => {
+        if (typeof c.lat !== 'number' || typeof c.lng !== 'number') return;
+
+        const radarIcon = L.divIcon({
+          className: 'leaflet-radar-divicon',
+          html: '<div class="radar-beacon"><div class="radar-beacon-ring"></div><div class="radar-beacon-ring-2"></div><div class="radar-beacon-core"><span>' + (c.flag || '📍') + '</span></div></div>',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+          popupAnchor: [0, -18],
+        });
+
+        const countryVisitors = visList.filter(v => v.countryCode === c.code);
+        const topRoutes = Array.from(new Set(countryVisitors.flatMap(v => v.visitedRoutes || []))).slice(0, 3);
+
+        const popupHtml = '<div class="map-popup-card">' +
+          '<div class="map-popup-title">' + (c.flag || '') + ' ' + (c.name || 'Visitor') + '</div>' +
+          '<div class="map-popup-row"><span>Status:</span><span class="map-popup-val" style="color: #3fb950;">🟢 Live Traffic</span></div>' +
+          '<div class="map-popup-row"><span>Total Requests:</span><span class="map-popup-val">' + (c.requests || 1) + '</span></div>' +
+          '<div class="map-popup-row"><span>Coordinates:</span><span class="map-popup-val">' + c.lat.toFixed(2) + '°, ' + c.lng.toFixed(2) + '°</span></div>' +
+          (topRoutes.length ? '<div class="map-popup-row"><span>Routes:</span><span class="map-popup-val" style="font-family: monospace;">' + topRoutes.join(', ') + '</span></div>' : '') +
+          '</div>';
+
+        const marker = L.marker([c.lat, c.lng], { icon: radarIcon })
+          .bindPopup(popupHtml, { closeButton: false, offset: [0, -10] });
+
+        marker.on('mouseover', function () { this.openPopup(); });
+        visitorMarkersGroup.addLayer(marker);
+      });
+    }
+
+    window.addEventListener('load', () => {
+      setTimeout(initLeafletSatelliteMap, 300);
+    });
+
     function switchTab(tab, btn) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -1229,33 +1356,13 @@ export class AdminTelemetry {
         const el = document.getElementById('panel-' + p);
         if (el) el.style.display = tab === p ? 'block' : 'none';
       });
-    }
-
-    function setupMapTooltip() {
-      const mapWrap = document.getElementById('world-map-wrap');
-      const tooltip = document.getElementById('map-tooltip');
-      if (mapWrap && tooltip) {
-        mapWrap.addEventListener('mousemove', (e) => {
-          const dot = e.target.closest('.radar-dot');
-          if (dot) {
-            const rect = mapWrap.getBoundingClientRect();
-            const name = dot.getAttribute('data-name');
-            const flag = dot.getAttribute('data-flag');
-            const reqs = dot.getAttribute('data-reqs');
-            tooltip.innerHTML = '<strong>' + flag + ' ' + name + '</strong><br><span style="color:#8b949e;">Requests:</span> ' + reqs;
-            tooltip.style.left = (e.clientX - rect.left + 15) + 'px';
-            tooltip.style.top = (e.clientY - rect.top + 15) + 'px';
-            tooltip.style.display = 'block';
-          } else {
-            tooltip.style.display = 'none';
-          }
-        });
-        mapWrap.addEventListener('mouseleave', () => {
-          if (tooltip) tooltip.style.display = 'none';
-        });
+      if (tab === 'map') {
+        initLeafletSatelliteMap();
+        if (window.leafletMap) {
+          setTimeout(() => window.leafletMap.invalidateSize(), 80);
+        }
       }
     }
-    setTimeout(setupMapTooltip, 200);
 
     async function toggleBlockVisitorIp(ip) {
       if (!confirm('Toggle firewall ban for IP: ' + ip + '?')) return;
@@ -1620,20 +1727,9 @@ export class AdminTelemetry {
           intelDevices.innerHTML = '📱 ' + data.visitorSummary.devices.mobile + ' • 💻 ' + data.visitorSummary.devices.desktop + ' • 📟 ' + data.visitorSummary.devices.tablet;
         }
 
-        // Update Radar Dots on World Map
-        const radarGroup = document.getElementById('map-radar-group');
-        if (radarGroup && data.visitorSummary.countries) {
-          radarGroup.innerHTML = data.visitorSummary.countries.map(c => {
-            const x = Math.round((c.lng + 180) * (800 / 360));
-            const y = Math.round((90 - c.lat) * (400 / 180));
-            return \`
-              <g class="radar-dot" data-name="\${c.name}" data-flag="\${c.flag}" data-reqs="\${c.requests}" transform="translate(\${x}, \${y})">
-                <circle class="radar-ring" cx="0" cy="0" r="10" fill="none" stroke="#58a6ff" opacity="0.8" />
-                <circle cx="0" cy="0" r="5" fill="#58a6ff" stroke="#fff" stroke-width="1.5" />
-                <circle cx="0" cy="0" r="2" fill="#fff" />
-              </g>
-            \`;
-          }).join('');
+        // Update Leaflet Satellite Map Markers
+        if (typeof updateMapMarkers === 'function') {
+          updateMapMarkers(data.visitorSummary.countries, data.visitors);
         }
       }
 

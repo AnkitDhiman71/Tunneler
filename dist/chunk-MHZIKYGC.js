@@ -245,74 +245,210 @@ var VisitorIntelligence = class _VisitorIntelligence {
 // src/admin-extensions.ts
 function renderWorldMapStyles() {
   return `
-    /* WORLD MAP & RADAR STYLES */
+    /* MODERN SATELLITE RADAR MAP STYLES */
     .map-container {
-      background: radial-gradient(circle at 50% 50%, #161b22, #090d13 90%);
+      background: #0d1117;
       border: 1px solid rgba(240, 246, 252, 0.15);
-      border-radius: 12px;
-      padding: 1.5rem;
+      border-radius: 14px;
+      padding: 1.25rem;
       position: relative;
-      overflow: hidden;
       margin-bottom: 1.5rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
     }
     .map-header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 1rem;
+      margin-bottom: 0.9rem;
+      flex-wrap: wrap;
+      gap: 10px;
     }
-    .map-header h3 { font-size: 1.1rem; display: flex; align-items: center; gap: 8px; }
-    .map-header .map-stats { display: flex; gap: 15px; font-size: 0.85rem; color: #8b949e; }
-    .map-header .map-stats span { color: #58a6ff; font-weight: 600; }
-
+    .map-header h3 { font-size: 1.15rem; display: flex; align-items: center; gap: 8px; color: #fff; }
+    .map-controls-bar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .map-stats { display: flex; gap: 15px; font-size: 0.85rem; color: #8b949e; align-items: center; }
+    .map-stats span { color: #58a6ff; font-weight: 600; }
+    .map-layer-selector {
+      display: flex;
+      background: rgba(22, 27, 34, 0.9);
+      border: 1px solid rgba(240, 246, 252, 0.15);
+      border-radius: 8px;
+      padding: 2px;
+      gap: 2px;
+    }
+    .map-layer-btn {
+      background: transparent;
+      border: none;
+      color: #8b949e;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      transition: all 0.2s;
+    }
+    .map-layer-btn.active {
+      background: #238636;
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(35, 134, 54, 0.4);
+    }
+    .map-reset-btn {
+      background: rgba(88, 166, 255, 0.15);
+      border: 1px solid rgba(88, 166, 255, 0.3);
+      color: #58a6ff;
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s;
+    }
+    .map-reset-btn:hover {
+      background: #58a6ff;
+      color: #0d1117;
+    }
     .map-wrapper {
       position: relative;
       width: 100%;
-      height: 380px;
-      background: #0d1117;
+      height: 520px;
+      background: #040608;
       border-radius: 10px;
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
       overflow: hidden;
+      z-index: 1;
     }
-    .world-svg {
+    #leaflet-satellite-map {
       width: 100%;
       height: 100%;
-      display: block;
+      background: #06090e;
     }
 
-    /* RADAR PULSING DOTS */
-    .radar-dot {
+    /* CUSTOM RADAR BEACON PIN */
+    .leaflet-radar-divicon {
+      background: transparent !important;
+      border: none !important;
+    }
+    .radar-beacon {
+      position: relative;
+      width: 32px;
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       cursor: pointer;
-      transform-origin: center;
+    }
+    .radar-beacon-ring {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2px solid #58a6ff;
+      box-shadow: 0 0 15px #58a6ff;
+      animation: beaconWave 2s infinite ease-out;
+      pointer-events: none;
+    }
+    .radar-beacon-ring-2 {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      border: 2px solid #3fb950;
+      box-shadow: 0 0 20px #3fb950;
+      animation: beaconWave 2s infinite ease-out 1s;
+      pointer-events: none;
+    }
+    @keyframes beaconWave {
+      0% { transform: scale(0.3); opacity: 1; }
+      100% { transform: scale(2.8); opacity: 0; }
+    }
+    .radar-beacon-core {
+      position: relative;
+      width: 26px;
+      height: 26px;
+      background: rgba(13, 17, 23, 0.95);
+      border: 2px solid #58a6ff;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      box-shadow: 0 0 12px rgba(88, 166, 255, 0.8);
       transition: transform 0.2s;
     }
-    .radar-dot:hover {
-      transform: scale(1.5);
-    }
-    .radar-ring {
-      animation: pulseRadar 2.5s infinite ease-out;
-      transform-origin: center;
-    }
-    @keyframes pulseRadar {
-      0% { r: 5; opacity: 0.9; stroke-width: 2; }
-      100% { r: 24; opacity: 0; stroke-width: 0.5; }
+    .radar-beacon:hover .radar-beacon-core {
+      transform: scale(1.4);
+      border-color: #3fb950;
     }
 
-    /* MAP TOOLTIP */
-    .map-tooltip {
-      position: absolute;
-      display: none;
-      background: rgba(22, 27, 34, 0.95);
-      border: 1px solid #58a6ff;
-      border-radius: 8px;
-      padding: 8px 12px;
+    /* LEAFLET DARK THEME POPUPS */
+    .leaflet-popup-content-wrapper {
+      background: rgba(13, 17, 23, 0.96) !important;
+      border: 1px solid rgba(88, 166, 255, 0.4) !important;
+      border-radius: 12px !important;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8) !important;
+      backdrop-filter: blur(10px) !important;
+      color: #e6edf3 !important;
+      padding: 0 !important;
+    }
+    .leaflet-popup-tip {
+      background: #0d1117 !important;
+    }
+    .leaflet-popup-content {
+      margin: 12px 16px !important;
+      line-height: 1.4 !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    }
+    .map-popup-card {
+      font-size: 0.85rem;
+    }
+    .map-popup-title {
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid rgba(240, 246, 252, 0.1);
+      padding-bottom: 6px;
+    }
+    .map-popup-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 4px 0;
+      color: #8b949e;
       font-size: 0.8rem;
+      gap: 12px;
+    }
+    .map-popup-val {
       color: #fff;
-      pointer-events: none;
-      z-index: 100;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.6);
-      backdrop-filter: blur(8px);
-      white-space: nowrap;
+      font-weight: 600;
+    }
+    .leaflet-control-zoom a {
+      background: #161b22 !important;
+      color: #e6edf3 !important;
+      border: 1px solid rgba(240, 246, 252, 0.15) !important;
+    }
+    .leaflet-control-zoom a:hover {
+      background: #21262d !important;
+      color: #58a6ff !important;
+    }
+    .leaflet-control-attribution {
+      background: rgba(13, 17, 23, 0.7) !important;
+      color: #8b949e !important;
+      font-size: 0.65rem !important;
+    }
+    .leaflet-control-attribution a {
+      color: #58a6ff !important;
     }
 
     /* VISITOR STATS CARDS */
@@ -416,63 +552,28 @@ function renderWorldMapStyles() {
     .audit-item .desc { font-size: 0.75rem; color: #8b949e; line-height: 1.3; }
   `;
 }
-function renderVectorWorldMapSvg(countries) {
-  const mapWidth = 800;
-  const mapHeight = 400;
-  const dotsSvg = countries.map((c) => {
-    const x = Math.round((c.lng + 180) * (mapWidth / 360));
-    const y = Math.round((90 - c.lat) * (mapHeight / 180));
-    return `
-        <g class="radar-dot" data-name="${c.name}" data-flag="${c.flag}" data-reqs="${c.requests}" transform="translate(${x}, ${y})">
-          <circle class="radar-ring" cx="0" cy="0" r="10" fill="none" stroke="#58a6ff" opacity="0.8" />
-          <circle cx="0" cy="0" r="5" fill="#58a6ff" stroke="#fff" stroke-width="1.5" />
-          <circle cx="0" cy="0" r="2" fill="#fff" />
-        </g>
-      `;
-  }).join("");
+function renderSatelliteMapContainer(summary) {
   return `
-    <svg class="world-svg" viewBox="0 0 ${mapWidth} ${mapHeight}" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <radialGradient id="gridGlow" cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stop-color="#1f2937" stop-opacity="0.3" />
-          <stop offset="100%" stop-color="#0d1117" stop-opacity="0" />
-        </radialGradient>
-      </defs>
-      <!-- Background Grid -->
-      <rect width="100%" height="100%" fill="#0d1117" />
-      <rect width="100%" height="100%" fill="url(#gridGlow)" />
-      
-      <!-- Coordinate Latitude/Longitude Grid Lines -->
-      <g stroke="rgba(255,255,255,0.04)" stroke-width="0.75" stroke-dasharray="3 3">
-        <line x1="0" y1="100" x2="800" y2="100" />
-        <line x1="0" y1="200" x2="800" y2="200" />
-        <line x1="0" y1="300" x2="800" y2="300" />
-        <line x1="200" y1="0" x2="200" y2="400" />
-        <line x1="400" y1="0" x2="400" y2="400" />
-        <line x1="600" y1="0" x2="600" y2="400" />
-      </g>
-
-      <!-- Continents Silhouette Paths (Ultra-Clean Vector Representation) -->
-      <g fill="#1b2430" stroke="#253243" stroke-width="1" opacity="0.85">
-        <!-- North America -->
-        <path d="M 80 60 Q 120 40 180 50 Q 220 70 240 110 Q 220 160 170 170 Q 140 180 130 200 Q 110 230 110 210 Q 90 170 80 140 Q 60 100 80 60 Z" />
-        <!-- South America -->
-        <path d="M 190 220 Q 240 230 250 280 Q 240 330 210 370 Q 190 350 180 300 Q 170 260 190 220 Z" />
-        <!-- Europe -->
-        <path d="M 370 70 Q 430 60 460 90 Q 450 130 410 140 Q 380 130 360 110 Q 360 80 370 70 Z" />
-        <!-- Africa -->
-        <path d="M 360 150 Q 430 140 460 180 Q 470 240 430 310 Q 390 320 370 270 Q 340 230 340 190 Z" />
-        <!-- Asia -->
-        <path d="M 450 60 Q 560 40 680 70 Q 720 120 690 180 Q 640 220 580 200 Q 520 190 490 140 Q 460 110 450 60 Z" />
-        <!-- Australia -->
-        <path d="M 640 270 Q 720 260 740 300 Q 730 340 670 340 Q 630 320 640 270 Z" />
-      </g>
-
-      <!-- Active Visitor Radar Dots -->
-      <g id="map-radar-group">
-        ${dotsSvg}
-      </g>
-    </svg>
+    <div class="map-container">
+      <div class="map-header">
+        <h3>\u{1F6F0}\uFE0F Real-Time Global Visitor Radar</h3>
+        <div class="map-controls-bar">
+          <div class="map-layer-selector">
+            <button class="map-layer-btn active" id="btn-layer-sat" onclick="switchMapLayer('satellite')">\u{1F6F0}\uFE0F Satellite</button>
+            <button class="map-layer-btn" id="btn-layer-dark" onclick="switchMapLayer('dark')">\u{1F30C} Cyber Dark</button>
+            <button class="map-layer-btn" id="btn-layer-streets" onclick="switchMapLayer('streets')">\u{1F5FA}\uFE0F Streets</button>
+          </div>
+          <button class="map-reset-btn" onclick="resetMapView()" title="Reset to global overview">\u{1F30D} Overview</button>
+          <div class="map-stats">
+            <div>Countries: <span id="map-country-count">${summary.countries.length}</span></div>
+            <div>Online: <span id="map-active-count">${summary.activeNow}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="map-wrapper" id="world-map-wrap">
+        <div id="leaflet-satellite-map"></div>
+      </div>
+    </div>
   `;
 }
 function renderVisitorIntelligencePanel(summary, visitors) {
@@ -1075,6 +1176,8 @@ var AdminTelemetry = class {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>\u26A1 peer-port \u2014 Executive Admin Center</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body {
@@ -1511,19 +1614,7 @@ var AdminTelemetry = class {
 
     <!-- TAB: WORLD RADAR MAP -->
     <div class="panel" id="panel-map" style="display: none;">
-      <div class="map-container">
-        <div class="map-header">
-          <h3>\u{1F5FA}\uFE0F Real-Time Global Visitor Radar</h3>
-          <div class="map-stats">
-            <div>Countries: <span id="map-country-count">${stats.visitorSummary.countries.length}</span></div>
-            <div>Online: <span id="map-active-count">${stats.visitorSummary.activeNow}</span></div>
-          </div>
-        </div>
-        <div class="map-wrapper" id="world-map-wrap">
-          ${renderVectorWorldMapSvg(stats.visitorSummary.countries)}
-          <div id="map-tooltip" class="map-tooltip"></div>
-        </div>
-      </div>
+      ${renderSatelliteMapContainer(stats.visitorSummary)}
     </div>
 
     <!-- TAB: VISITOR INTELLIGENCE -->
@@ -1708,6 +1799,142 @@ var AdminTelemetry = class {
     let currentStats = ${JSON.stringify(stats)};
     let activeModalTunnelId = 'local_tunnel';
 
+    let leafletMap = null;
+    let leafletLayers = {};
+    let activeLayerName = 'satellite';
+    let visitorMarkersGroup = null;
+
+    function initLeafletSatelliteMap() {
+      if (leafletMap || typeof L === 'undefined') {
+        if (leafletMap) setTimeout(() => leafletMap.invalidateSize(), 80);
+        return;
+      }
+      const mapContainer = document.getElementById('leaflet-satellite-map');
+      if (!mapContainer) return;
+
+      try {
+        // 1. ESRI High-Resolution Photorealistic Satellite Imagery Layer
+        const satLayer = L.tileLayer(
+          'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+          {
+            attribution: 'Imagery &copy; Esri, Maxar, Earthstar Geographics',
+            maxZoom: 18,
+          }
+        );
+
+        // Labels overlay for Satellite so borders and cities are crystal clear
+        const labelsLayer = L.tileLayer(
+          'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+          {
+            maxZoom: 18,
+            opacity: 0.9,
+          }
+        );
+        const satGroup = L.layerGroup([satLayer, labelsLayer]);
+
+        // 2. CartoDB Dark Matter Cyber Radar Layer
+        const darkLayer = L.tileLayer(
+          'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+          {
+            attribution: '&copy; CartoDB',
+            subdomains: 'abcd',
+            maxZoom: 19,
+          }
+        );
+
+        // 3. OpenStreetMap Streets Layer
+        const streetLayer = L.tileLayer(
+          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19,
+          }
+        );
+
+        leafletLayers = {
+          satellite: satGroup,
+          dark: darkLayer,
+          streets: streetLayer,
+        };
+
+        leafletMap = L.map('leaflet-satellite-map', {
+          center: [20.59, 78.96],
+          zoom: 3,
+          minZoom: 2,
+          maxZoom: 18,
+          layers: [satGroup],
+          zoomControl: true,
+          worldCopyJump: true,
+        });
+
+        visitorMarkersGroup = L.layerGroup().addTo(leafletMap);
+        window.leafletMap = leafletMap;
+
+        if (currentStats && currentStats.visitorSummary) {
+          updateMapMarkers(currentStats.visitorSummary.countries, currentStats.visitors);
+        }
+      } catch (e) {
+        console.error('Leaflet initialization error:', e);
+      }
+    }
+
+    function switchMapLayer(layerName) {
+      if (!leafletMap || !leafletLayers[layerName]) return;
+      document.querySelectorAll('.map-layer-btn').forEach(b => b.classList.remove('active'));
+      const activeBtn = document.getElementById('btn-layer-' + (layerName === 'satellite' ? 'sat' : layerName));
+      if (activeBtn) activeBtn.classList.add('active');
+
+      Object.values(leafletLayers).forEach(layer => leafletMap.removeLayer(layer));
+      leafletMap.addLayer(leafletLayers[layerName]);
+      activeLayerName = layerName;
+    }
+
+    function resetMapView() {
+      if (!leafletMap) return;
+      leafletMap.setView([20.59, 78.96], 3, { animate: true });
+    }
+
+    function updateMapMarkers(countries, visitors) {
+      if (!leafletMap || !visitorMarkersGroup) return;
+      visitorMarkersGroup.clearLayers();
+
+      const list = countries || [];
+      const visList = visitors || [];
+
+      list.forEach(c => {
+        if (typeof c.lat !== 'number' || typeof c.lng !== 'number') return;
+
+        const radarIcon = L.divIcon({
+          className: 'leaflet-radar-divicon',
+          html: '<div class="radar-beacon"><div class="radar-beacon-ring"></div><div class="radar-beacon-ring-2"></div><div class="radar-beacon-core"><span>' + (c.flag || '\u{1F4CD}') + '</span></div></div>',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+          popupAnchor: [0, -18],
+        });
+
+        const countryVisitors = visList.filter(v => v.countryCode === c.code);
+        const topRoutes = Array.from(new Set(countryVisitors.flatMap(v => v.visitedRoutes || []))).slice(0, 3);
+
+        const popupHtml = '<div class="map-popup-card">' +
+          '<div class="map-popup-title">' + (c.flag || '') + ' ' + (c.name || 'Visitor') + '</div>' +
+          '<div class="map-popup-row"><span>Status:</span><span class="map-popup-val" style="color: #3fb950;">\u{1F7E2} Live Traffic</span></div>' +
+          '<div class="map-popup-row"><span>Total Requests:</span><span class="map-popup-val">' + (c.requests || 1) + '</span></div>' +
+          '<div class="map-popup-row"><span>Coordinates:</span><span class="map-popup-val">' + c.lat.toFixed(2) + '\xB0, ' + c.lng.toFixed(2) + '\xB0</span></div>' +
+          (topRoutes.length ? '<div class="map-popup-row"><span>Routes:</span><span class="map-popup-val" style="font-family: monospace;">' + topRoutes.join(', ') + '</span></div>' : '') +
+          '</div>';
+
+        const marker = L.marker([c.lat, c.lng], { icon: radarIcon })
+          .bindPopup(popupHtml, { closeButton: false, offset: [0, -10] });
+
+        marker.on('mouseover', function () { this.openPopup(); });
+        visitorMarkersGroup.addLayer(marker);
+      });
+    }
+
+    window.addEventListener('load', () => {
+      setTimeout(initLeafletSatelliteMap, 300);
+    });
+
     function switchTab(tab, btn) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
@@ -1716,33 +1943,13 @@ var AdminTelemetry = class {
         const el = document.getElementById('panel-' + p);
         if (el) el.style.display = tab === p ? 'block' : 'none';
       });
-    }
-
-    function setupMapTooltip() {
-      const mapWrap = document.getElementById('world-map-wrap');
-      const tooltip = document.getElementById('map-tooltip');
-      if (mapWrap && tooltip) {
-        mapWrap.addEventListener('mousemove', (e) => {
-          const dot = e.target.closest('.radar-dot');
-          if (dot) {
-            const rect = mapWrap.getBoundingClientRect();
-            const name = dot.getAttribute('data-name');
-            const flag = dot.getAttribute('data-flag');
-            const reqs = dot.getAttribute('data-reqs');
-            tooltip.innerHTML = '<strong>' + flag + ' ' + name + '</strong><br><span style="color:#8b949e;">Requests:</span> ' + reqs;
-            tooltip.style.left = (e.clientX - rect.left + 15) + 'px';
-            tooltip.style.top = (e.clientY - rect.top + 15) + 'px';
-            tooltip.style.display = 'block';
-          } else {
-            tooltip.style.display = 'none';
-          }
-        });
-        mapWrap.addEventListener('mouseleave', () => {
-          if (tooltip) tooltip.style.display = 'none';
-        });
+      if (tab === 'map') {
+        initLeafletSatelliteMap();
+        if (window.leafletMap) {
+          setTimeout(() => window.leafletMap.invalidateSize(), 80);
+        }
       }
     }
-    setTimeout(setupMapTooltip, 200);
 
     async function toggleBlockVisitorIp(ip) {
       if (!confirm('Toggle firewall ban for IP: ' + ip + '?')) return;
@@ -2107,20 +2314,9 @@ var AdminTelemetry = class {
           intelDevices.innerHTML = '\u{1F4F1} ' + data.visitorSummary.devices.mobile + ' \u2022 \u{1F4BB} ' + data.visitorSummary.devices.desktop + ' \u2022 \u{1F4DF} ' + data.visitorSummary.devices.tablet;
         }
 
-        // Update Radar Dots on World Map
-        const radarGroup = document.getElementById('map-radar-group');
-        if (radarGroup && data.visitorSummary.countries) {
-          radarGroup.innerHTML = data.visitorSummary.countries.map(c => {
-            const x = Math.round((c.lng + 180) * (800 / 360));
-            const y = Math.round((90 - c.lat) * (400 / 180));
-            return \`
-              <g class="radar-dot" data-name="\${c.name}" data-flag="\${c.flag}" data-reqs="\${c.requests}" transform="translate(\${x}, \${y})">
-                <circle class="radar-ring" cx="0" cy="0" r="10" fill="none" stroke="#58a6ff" opacity="0.8" />
-                <circle cx="0" cy="0" r="5" fill="#58a6ff" stroke="#fff" stroke-width="1.5" />
-                <circle cx="0" cy="0" r="2" fill="#fff" />
-              </g>
-            \`;
-          }).join('');
+        // Update Leaflet Satellite Map Markers
+        if (typeof updateMapMarkers === 'function') {
+          updateMapMarkers(data.visitorSummary.countries, data.visitors);
         }
       }
 
@@ -3469,4 +3665,4 @@ export {
   SignalingServer,
   startPeerTunnel
 };
-//# sourceMappingURL=chunk-CHXQSDCG.js.map
+//# sourceMappingURL=chunk-MHZIKYGC.js.map
