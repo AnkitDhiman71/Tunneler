@@ -106,3 +106,18 @@ When developers build web applications locally (e.g. a MERN stack app running Re
 - **Heartbeat Protocol:** Client CLI sessions send recurring HTTP POST heartbeats (`/__peer_hub_heartbeat`) every 3 seconds to the central management node (`tunneler-admin.onrender.com`).
 - **Bi-directional Sync:** The heartbeat response delivers active administrative state (e.g. `isPaused: true` or `disabledPages: ['/checkout']`) back to the client CLI, enforcing remote commands without requiring incoming firewall ports.
 
+### E. Real-Time Global Visitor Radar (`src/visitor-intel.ts` & `src/admin-extensions.ts`)
+- **Interactive SVG Vector Map:** Uses equirectangular coordinate mapping (`x = (lng + 180) * (800 / 360)`, `y = (90 - lat) * (400 / 180)`) with glowing cyan radar pulse animations directly on Render without external map APIs.
+- **Edge Geolocation:** Resolves visitor geographic country and coordinates from Cloudflare edge headers (`cf-ipcountry`).
+
+### F. Device & Session Intelligence with IP Firewall
+- **User-Agent Fingerprinting:** Extracts exact OS (Windows 11/10, macOS, iOS, Android, Linux), browser engine (Chrome, Safari, Firefox, Edge, Opera), and device category (Desktop, Mobile, Tablet, Bot).
+- **Session Timeline & Route Tracking:** Tracks first seen, last active timestamp, session duration, and unique visited routes per user.
+- **1-Click IP Firewall:** Blocks abusive visitors or web scrapers with an instant 403 Access Denied gatekeeper.
+
+### G. Embedded Live API Laboratory & Security Posture Scorecard
+- **In-Browser REST Console:** Postman-style interactive testing console embedded directly in the admin dashboard allowing admins to test any route (`GET`, `POST`, `PUT`, `DELETE`), configure custom headers, and send JSON bodies with live status, latency, and formatted JSON output.
+- **cURL & Fetch Code Generator:** Instant 1-click command generation to replay any request in terminal or frontend code.
+- **Security Audit Engine:** Live security posture scorecard assessing TLS 1.3 encryption, cryptographic cookie flags, PIN gatekeeper status, and proxy hop integrity.
+
+

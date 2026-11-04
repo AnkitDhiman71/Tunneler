@@ -197,6 +197,79 @@ export class PinGuardProxy {
       return;
     }
 
+    // 4.5. Admin API Laboratory Test Route (Requires Admin Auth)
+    if (url.pathname === '/__peer_admin_api_test' && req.method === 'POST') {
+      if (!this.isAdminAuthorized(req)) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Unauthorized' }));
+        return;
+      }
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        try {
+          const { method = 'GET', path = '/', headers = {}, body: reqBody = '' } = JSON.parse(body);
+          const startTime = Date.now();
+          const targetUrl = new URL(path, `http://${this.targetHost}:${this.targetPort}`);
+
+          const proxyReq = http.request(
+            targetUrl,
+            {
+              method: method.toUpperCase(),
+              headers: {
+                ...headers,
+                host: `${this.targetHost}:${this.targetPort}`,
+              },
+            },
+            (targetRes) => {
+              let resData = '';
+              targetRes.on('data', (c) => (resData += c));
+              targetRes.on('end', () => {
+                const duration = Date.now() - startTime;
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(
+                  JSON.stringify({
+                    status: targetRes.statusCode || 200,
+                    headers: targetRes.headers,
+                    body: resData,
+                    duration,
+                  })
+                );
+              });
+            }
+          );
+
+          proxyReq.on('error', (err) => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                status: 502,
+                headers: {},
+                body: `Connection failed: ${err.message}`,
+                duration: Date.now() - startTime,
+              })
+            );
+          });
+
+          if (reqBody && ['POST', 'PUT', 'PATCH'].includes(method.toUpperCase())) {
+            proxyReq.write(typeof reqBody === 'string' ? reqBody : JSON.stringify(reqBody));
+          }
+          proxyReq.end();
+        } catch (err: any) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message }));
+        }
+      });
+      return;
+    }
+
+    // 4.8. IP Firewall Blacklist Check
+    if (this.telemetry.isIpBlocked(clientIp)) {
+      res.writeHead(403, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(`<!DOCTYPE html><html><head><title>403 Access Denied</title><style>body{background:#0d1117;color:#e6edf3;font-family:sans-serif;padding:3rem;text-align:center;}h1{color:#f85149;}</style></head><body><h1>🚫 403 Access Denied</h1><p>Your IP address (<code>${escapeHtml(clientIp)}</code>) has been blocked by the administrator.</p></body></html>`);
+      return;
+    }
+
     // 5. Emergency Master Kill Switch Check
     if (this.telemetry.isPaused) {
       res.writeHead(503, { 'Content-Type': 'text/html; charset=utf-8' });
@@ -314,6 +387,16 @@ export class PinGuardProxy {
       case 'toggle_resolve_feedback':
         const fb = this.telemetry.feedbacks.find((f) => f.id === payload.id);
         if (fb) fb.resolved = !fb.resolved;
+        break;
+      case 'toggle_block_ip':
+        if (payload.ip) {
+          const isBlocked = this.telemetry.toggleBlockVisitorIp(payload.ip);
+          console.log(
+            isBlocked
+              ? pc.red(`  🚫 [FIREWALL] Blocked IP: ${payload.ip}`)
+              : pc.green(`  ✔ [FIREWALL] Restored IP: ${payload.ip}`)
+          );
+        }
         break;
     }
   }

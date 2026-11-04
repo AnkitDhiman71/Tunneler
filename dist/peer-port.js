@@ -2,7 +2,7 @@
 import {
   startGlobalTunnel,
   startPeerTunnel
-} from "./chunk-5SHQM2HM.js";
+} from "./chunk-UQ7TWUF6.js";
 
 // bin/peer-port.ts
 import process from "process";

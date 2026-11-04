@@ -1,6 +1,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { VisitorIntelligence, type VisitorProfile } from './visitor-intel.js';
+import {
+  renderWorldMapStyles,
+  renderVectorWorldMapSvg,
+  renderVisitorIntelligencePanel,
+  renderApiLaboratoryPanel,
+} from './admin-extensions.js';
 
 // Automatically load .env file if present
 function loadEnv() {
@@ -97,6 +104,15 @@ export class AdminTelemetry {
   public adminPassword: string;
 
   public remoteTunnels = new Map<string, RemoteTunnelInfo>();
+  public visitorIntel = new VisitorIntelligence();
+
+  public isIpBlocked(ip: string): boolean {
+    return this.visitorIntel.isIpBlocked(ip);
+  }
+
+  public toggleBlockVisitorIp(ip: string): boolean {
+    return this.visitorIntel.toggleBlockIp(ip);
+  }
 
   public statusCounts: Record<string, number> = {
     '2xx': 0,
@@ -185,6 +201,7 @@ export class AdminTelemetry {
     this.activeRequests = Math.max(0, this.activeRequests - 1);
     this.totalDuration += duration;
     this.uniqueVisitors.add(ip);
+    this.visitorIntel.recordHit(ip, url, headers, duration);
 
     const group = `${Math.floor(status / 100)}xx`;
     this.statusCounts[group] = (this.statusCounts[group] || 0) + 1;
@@ -304,6 +321,9 @@ export class AdminTelemetry {
       });
     }
 
+    const visitorSummary = this.visitorIntel.getSummaryStats();
+    const visitors = this.visitorIntel.getVisitorsList();
+
     return {
       publicUrl: effectiveUrl,
       targetHost: this.targetHost,
@@ -320,6 +340,8 @@ export class AdminTelemetry {
       requestGroups: this.requestGroups.slice(0, 50),
       feedbacks: this.feedbacks,
       tunnels: tunnelsList,
+      visitorSummary,
+      visitors,
     };
   }
 
@@ -689,6 +711,7 @@ export class AdminTelemetry {
     .feedback-header { display: flex; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.8rem; color: #8b949e; }
     .feedback-body { font-size: 0.95rem; color: #fff; margin-bottom: 0.5rem; }
     .feedback-meta { font-family: monospace; font-size: 0.75rem; color: #58a6ff; margin-bottom: 0.5rem; }
+    ${renderWorldMapStyles()}
   </style>
 </head>
 <body>
@@ -702,6 +725,9 @@ export class AdminTelemetry {
     </div>
     <div class="tabs">
       <button class="tab-btn active" onclick="switchTab('websites', this)">🌐 Hosted Websites (${stats.tunnels.length})</button>
+      <button class="tab-btn" onclick="switchTab('map', this)">🗺️ Global Radar (<span id="tab-cnt-countries">${stats.visitorSummary.countries.length}</span>)</button>
+      <button class="tab-btn" onclick="switchTab('visitors', this)">👥 Visitor Intelligence (<span id="tab-cnt-visitors">${stats.visitorSummary.totalVisitors}</span>)</button>
+      <button class="tab-btn" onclick="switchTab('apilab', this)">⚡ API Laboratory</button>
       <button class="tab-btn" onclick="switchTab('feedback', this)">📌 Bug Reports (${stats.feedbacksCount})</button>
       <button class="tab-btn" onclick="switchTab('pages', this)">🚫 Blocked Pages (${stats.disabledPages.length})</button>
     </div>
@@ -804,6 +830,29 @@ export class AdminTelemetry {
         </tbody>
       </table>
     </div>
+
+    <!-- TAB: WORLD RADAR MAP -->
+    <div class="panel" id="panel-map" style="display: none;">
+      <div class="map-container">
+        <div class="map-header">
+          <h3>🗺️ Real-Time Global Visitor Radar</h3>
+          <div class="map-stats">
+            <div>Countries: <span id="map-country-count">${stats.visitorSummary.countries.length}</span></div>
+            <div>Online: <span id="map-active-count">${stats.visitorSummary.activeNow}</span></div>
+          </div>
+        </div>
+        <div class="map-wrapper" id="world-map-wrap">
+          ${renderVectorWorldMapSvg(stats.visitorSummary.countries)}
+          <div id="map-tooltip" class="map-tooltip"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB: VISITOR INTELLIGENCE -->
+    ${renderVisitorIntelligencePanel(stats.visitorSummary, stats.visitors)}
+
+    <!-- TAB: API LABORATORY -->
+    ${renderApiLaboratoryPanel()}
 
     <!-- TAB 2: BUG REPORTS -->
     <div class="panel" id="panel-feedback" style="display: none;">
@@ -1006,9 +1055,118 @@ export class AdminTelemetry {
     function switchTab(tab, btn) {
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById('panel-websites').style.display = tab === 'websites' ? 'block' : 'none';
-      document.getElementById('panel-feedback').style.display = tab === 'feedback' ? 'block' : 'none';
-      document.getElementById('panel-pages').style.display = tab === 'pages' ? 'block' : 'none';
+      const panels = ['websites', 'map', 'visitors', 'apilab', 'feedback', 'pages'];
+      panels.forEach(p => {
+        const el = document.getElementById('panel-' + p);
+        if (el) el.style.display = tab === p ? 'block' : 'none';
+      });
+    }
+
+    function setupMapTooltip() {
+      const mapWrap = document.getElementById('world-map-wrap');
+      const tooltip = document.getElementById('map-tooltip');
+      if (mapWrap && tooltip) {
+        mapWrap.addEventListener('mousemove', (e) => {
+          const dot = e.target.closest('.radar-dot');
+          if (dot) {
+            const rect = mapWrap.getBoundingClientRect();
+            const name = dot.getAttribute('data-name');
+            const flag = dot.getAttribute('data-flag');
+            const reqs = dot.getAttribute('data-reqs');
+            tooltip.innerHTML = '<strong>' + flag + ' ' + name + '</strong><br><span style="color:#8b949e;">Requests:</span> ' + reqs;
+            tooltip.style.left = (e.clientX - rect.left + 15) + 'px';
+            tooltip.style.top = (e.clientY - rect.top + 15) + 'px';
+            tooltip.style.display = 'block';
+          } else {
+            tooltip.style.display = 'none';
+          }
+        });
+        mapWrap.addEventListener('mouseleave', () => {
+          if (tooltip) tooltip.style.display = 'none';
+        });
+      }
+    }
+    setTimeout(setupMapTooltip, 200);
+
+    async function toggleBlockVisitorIp(ip) {
+      if (!confirm('Toggle firewall ban for IP: ' + ip + '?')) return;
+      const res = await sendAdminAction('toggle_block_ip', { ip });
+      if (res && res.success) updateUIState(res.stats);
+    }
+
+    async function sendApiLabRequest() {
+      const method = document.getElementById('api-method').value;
+      const path = document.getElementById('api-url').value;
+      let headers = {};
+      try {
+        headers = JSON.parse(document.getElementById('api-headers-input').value || '{}');
+      } catch (e) {
+        alert('Invalid JSON in headers: ' + e.message);
+        return;
+      }
+      let body = document.getElementById('api-body-input').value;
+
+      const resBox = document.getElementById('api-response-wrapper');
+      const resStatus = document.getElementById('api-res-status');
+      const resTime = document.getElementById('api-res-time');
+      const resBody = document.getElementById('api-res-body');
+
+      resStatus.textContent = 'Executing...';
+      resStatus.style.color = '#58a6ff';
+      resBox.style.display = 'block';
+
+      try {
+        const res = await fetch('/__peer_admin_api_test', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ method, path, headers, body })
+        });
+        const data = await res.json();
+        resStatus.textContent = data.status + (data.status < 400 ? ' OK' : ' Error');
+        resStatus.style.color = data.status < 400 ? '#3fb950' : '#f85149';
+        resTime.textContent = data.duration + ' ms';
+        try {
+          resBody.textContent = JSON.stringify(JSON.parse(data.body), null, 2);
+        } catch {
+          resBody.textContent = data.body || '(empty response)';
+        }
+      } catch (err) {
+        resStatus.textContent = 'Failed';
+        resStatus.style.color = '#f85149';
+        resBody.textContent = err.message;
+      }
+    }
+
+    function switchApiTab(tab) {
+      document.getElementById('tab-btn-headers').className = tab === 'headers' ? 'api-mini-tab active' : 'api-mini-tab';
+      document.getElementById('tab-btn-body').className = tab === 'body' ? 'api-mini-tab active' : 'api-mini-tab';
+      document.getElementById('api-headers-input').style.display = tab === 'headers' ? 'block' : 'none';
+      document.getElementById('api-body-input').style.display = tab === 'body' ? 'block' : 'none';
+    }
+
+    function loadApiTemplate(tpl) {
+      if (tpl === 'json') {
+        document.getElementById('api-headers-input').value = '{\\n  "Content-Type": "application/json"\\n}';
+        document.getElementById('api-body-input').value = '{\\n  "name": "Test Item",\\n  "timestamp": ' + Date.now() + '\\n}';
+      } else if (tpl === 'auth') {
+        document.getElementById('api-headers-input').value = '{\\n  "Content-Type": "application/json"\\n}';
+        document.getElementById('api-body-input').value = '{\\n  "email": "user@example.com",\\n  "password": "Password123"\\n}';
+      } else {
+        document.getElementById('api-headers-input').value = '{}';
+        document.getElementById('api-body-input').value = '';
+      }
+    }
+
+    function copyApiAsCurl() {
+      const method = document.getElementById('api-method').value;
+      const path = document.getElementById('api-url').value;
+      const body = document.getElementById('api-body-input').value;
+      const host = window.location.origin;
+      let curl = 'curl -X ' + method + ' "' + host + path + '"';
+      if (body && ['POST', 'PUT', 'PATCH'].includes(method)) {
+        curl += " -H 'Content-Type: application/json' -d '" + body.replace(/'/g, "\\'") + "'";
+      }
+      copyText(curl);
     }
 
     function toggleGroup(id) {
@@ -1243,6 +1401,59 @@ export class AdminTelemetry {
               </td>
             </tr>
           \`).join('');
+        }
+      }
+
+      // Update Visitor Intelligence Table
+      const visTable = document.getElementById('table-visitors-body');
+      if (visTable && data.visitors) {
+        if (data.visitors.length === 0) {
+          visTable.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #8b949e; padding: 2rem;">No visitors recorded yet. Open your public tunnel link to see your session appear here live!</td></tr>';
+        } else {
+          visTable.innerHTML = data.visitors.map(v => \`
+            <tr class="website-row" id="row-vis-\${v.id}">
+              <td style="font-family: monospace; font-weight: 600; color: #58a6ff;">\${v.ip}</td>
+              <td><span style="font-size: 1.1rem;">\${v.flag}</span> \${v.countryName}</td>
+              <td><span class="badge-device badge-\${v.deviceType.toLowerCase()}">\${v.deviceType === 'Mobile' ? '📱' : v.deviceType === 'Tablet' ? '📟' : '💻'} \${v.os}</span></td>
+              <td style="color: #e6edf3;">\${v.browser}</td>
+              <td>\${v.visitedRoutes.map(r => \`<span class="route-pill">\${r}</span>\`).join('')}</td>
+              <td><strong>\${v.requestCount}</strong> <span style="font-size: 0.75rem; color: #8b949e;">(\${v.avgLatency}ms)</span></td>
+              <td>\${Date.now() - v.lastActive < 120000 ? '<span class="status-badge-live">🟢 Online</span>' : '<span style="color: #8b949e; font-size: 0.8rem;">⚪ Idle</span>'}</td>
+              <td>
+                <button onclick="toggleBlockVisitorIp('\${v.ip}')" style="background: \${v.isBlocked ? '#238636' : '#da3633'}; color: #fff; border: none; padding: 4px 10px; border-radius: 4px; font-weight: 600; font-size: 0.75rem; cursor: pointer;">
+                  \${v.isBlocked ? '✅ Unblock IP' : '🚫 Ban IP'}
+                </button>
+              </td>
+            </tr>
+          \`).join('');
+        }
+      }
+
+      // Update Tab Counter Badges & Map Stats
+      if (data.visitorSummary) {
+        const cntCountries = document.getElementById('tab-cnt-countries');
+        const cntVisitors = document.getElementById('tab-cnt-visitors');
+        const mapCountryCount = document.getElementById('map-country-count');
+        const mapActiveCount = document.getElementById('map-active-count');
+        if (cntCountries) cntCountries.textContent = data.visitorSummary.countries.length;
+        if (cntVisitors) cntVisitors.textContent = data.visitorSummary.totalVisitors;
+        if (mapCountryCount) mapCountryCount.textContent = data.visitorSummary.countries.length;
+        if (mapActiveCount) mapActiveCount.textContent = data.visitorSummary.activeNow;
+
+        // Update Radar Dots on World Map
+        const radarGroup = document.getElementById('map-radar-group');
+        if (radarGroup && data.visitorSummary.countries) {
+          radarGroup.innerHTML = data.visitorSummary.countries.map(c => {
+            const x = Math.round((c.lng + 180) * (800 / 360));
+            const y = Math.round((90 - c.lat) * (400 / 180));
+            return \`
+              <g class="radar-dot" data-name="\${c.name}" data-flag="\${c.flag}" data-reqs="\${c.requests}" transform="translate(\${x}, \${y})">
+                <circle class="radar-ring" cx="0" cy="0" r="10" fill="none" stroke="#58a6ff" opacity="0.8" />
+                <circle cx="0" cy="0" r="5" fill="#58a6ff" stroke="#fff" stroke-width="1.5" />
+                <circle cx="0" cy="0" r="2" fill="#fff" />
+              </g>
+            \`;
+          }).join('');
         }
       }
 

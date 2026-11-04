@@ -10,3 +10,4 @@ export function printAdBanner(mode?: string): void {
     '\n  ' + pc.cyan(pc.bold('╚═╝  ╚═╝╚═════╝ ')) + '\n'
   );
 }
+

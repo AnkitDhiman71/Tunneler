@@ -240,4 +240,64 @@ describe('peer-port core modules', () => {
     guard.close();
     appServer.close();
   });
+
+  it('tracks visitor intelligence, parses device type and location', () => {
+    const guard = new PinGuardProxy({
+      targetPort: 3000,
+    });
+
+    guard.telemetry.recordRequestEnd(
+      'GET',
+      '/products',
+      200,
+      25,
+      '203.0.113.195',
+      {
+        'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1',
+        'cf-ipcountry': 'IN',
+      }
+    );
+
+    const stats = guard.telemetry.getStats();
+    expect(stats.visitors.length).toBe(1);
+    const vis = stats.visitors[0];
+    expect(vis.ip).toBe('203.0.113.195');
+    expect(vis.countryCode).toBe('IN');
+    expect(vis.countryName).toBe('India');
+    expect(vis.deviceType).toBe('Mobile');
+    expect(vis.os).toBe('iOS');
+    expect(vis.browser).toContain('Safari');
+    expect(vis.visitedRoutes).toContain('/products');
+  });
+
+  it('enforces IP firewall ban on blocked IP addresses', async () => {
+    const appServer = http.createServer((req, res) => {
+      res.writeHead(200, { 'Content-Type': 'text/plain' });
+      res.end('Welcome, visitor!');
+    });
+    await new Promise<void>((resolve) => appServer.listen(0, resolve));
+    const appPort = (appServer.address() as any).port;
+
+    const guard = new PinGuardProxy({
+      targetPort: appPort,
+    });
+    const guardPort = await guard.start();
+
+    // Normal access works
+    const res1 = await fetch(`http://localhost:${guardPort}/`);
+    expect(res1.status).toBe(200);
+
+    // Block localhost IP
+    guard.telemetry.toggleBlockVisitorIp('127.0.0.1');
+    guard.telemetry.toggleBlockVisitorIp('::1');
+
+    // Blocked access returns 403 Forbidden
+    const res2 = await fetch(`http://localhost:${guardPort}/`);
+    expect(res2.status).toBe(403);
+    const text2 = await res2.text();
+    expect(text2).toContain('403 Access Denied');
+
+    guard.close();
+    appServer.close();
+  });
 });
