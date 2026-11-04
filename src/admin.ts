@@ -117,6 +117,26 @@ export class AdminTelemetry {
     return this.visitorIntel.toggleBlockIp(ip);
   }
 
+  public updateVisitorGps(ip: string, lat: number, lng: number, accuracy?: number): boolean {
+    const updated = this.visitorIntel.updateGpsFix(ip, lat, lng, accuracy);
+    for (const t of this.remoteTunnels.values()) {
+      if (t.visitors) {
+        for (const v of t.visitors) {
+          if (v.ip === ip || ip === '127.0.0.1' || ip === 'localhost') {
+            v.lat = lat;
+            v.lng = lng;
+            v.accuracy = accuracy;
+            v.isGpsFix = true;
+            if (lat >= 27.5 && lat <= 31.0 && lng >= 74.0 && lng <= 78.5) {
+              v.countryName = 'Haryana, India';
+            }
+          }
+        }
+      }
+    }
+    return updated;
+  }
+
   public statusCounts: Record<string, number> = {
     '2xx': 0,
     '3xx': 0,
@@ -1271,8 +1291,8 @@ export class AdminTelemetry {
         };
 
         leafletMap = L.map('leaflet-satellite-map', {
-          center: [20.59, 78.96],
-          zoom: 3,
+          center: [28.7041, 76.9535],
+          zoom: 5,
           minZoom: 2,
           maxZoom: 18,
           layers: [satGroup],
@@ -1304,7 +1324,7 @@ export class AdminTelemetry {
 
     function resetMapView() {
       if (!leafletMap) return;
-      leafletMap.setView([20.59, 78.96], 3, { animate: true });
+      leafletMap.setView([28.7041, 76.9535], 5, { animate: true });
     }
 
     function updateMapMarkers(countries, visitors) {
@@ -1325,14 +1345,16 @@ export class AdminTelemetry {
           popupAnchor: [0, -18],
         });
 
-        const countryVisitors = visList.filter(v => v.countryCode === c.code);
+        const countryVisitors = visList.filter(v => v.countryCode === c.code || (c.code === 'IN' && v.countryCode === 'LOCAL'));
+        const hasGps = countryVisitors.some(v => v.isGpsFix);
         const topRoutes = Array.from(new Set(countryVisitors.flatMap(v => v.visitedRoutes || []))).slice(0, 3);
 
         const popupHtml = '<div class="map-popup-card">' +
           '<div class="map-popup-title">' + (c.flag || '') + ' ' + (c.name || 'Visitor') + '</div>' +
           '<div class="map-popup-row"><span>Status:</span><span class="map-popup-val" style="color: #3fb950;">🟢 Live Traffic</span></div>' +
+          (hasGps ? '<div class="map-popup-row"><span>Precision:</span><span class="map-popup-val" style="color: #3fb950;">🛰️ Exact Satellite GPS Fix</span></div>' : '') +
           '<div class="map-popup-row"><span>Total Requests:</span><span class="map-popup-val">' + (c.requests || 1) + '</span></div>' +
-          '<div class="map-popup-row"><span>Coordinates:</span><span class="map-popup-val">' + c.lat.toFixed(2) + '°, ' + c.lng.toFixed(2) + '°</span></div>' +
+          '<div class="map-popup-row"><span>Coordinates:</span><span class="map-popup-val">' + c.lat.toFixed(4) + '°, ' + c.lng.toFixed(4) + '°</span></div>' +
           (topRoutes.length ? '<div class="map-popup-row"><span>Routes:</span><span class="map-popup-val" style="font-family: monospace;">' + topRoutes.join(', ') + '</span></div>' : '') +
           '</div>';
 

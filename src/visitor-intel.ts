@@ -6,6 +6,8 @@ export interface VisitorProfile {
   flag: string;
   lat: number;
   lng: number;
+  accuracy?: number;
+  isGpsFix?: boolean;
   deviceType: 'Desktop' | 'Mobile' | 'Tablet' | 'Bot';
   os: string;
   browser: string;
@@ -36,7 +38,7 @@ export function getFlagEmoji(countryCode: string): string {
 }
 
 const COUNTRY_REGISTRY: Record<string, GeoLocation> = {
-  IN: { countryCode: 'IN', countryName: 'India', flag: '🇮🇳', lat: 20.59, lng: 78.96 },
+  IN: { countryCode: 'IN', countryName: 'India', flag: '🇮🇳', lat: 28.7041, lng: 76.9535 },
   US: { countryCode: 'US', countryName: 'United States', flag: '🇺🇸', lat: 37.09, lng: -95.71 },
   GB: { countryCode: 'GB', countryName: 'United Kingdom', flag: '🇬🇧', lat: 55.37, lng: -3.43 },
   CA: { countryCode: 'CA', countryName: 'Canada', flag: '🇨🇦', lat: 56.13, lng: -106.34 },
@@ -121,7 +123,7 @@ export class VisitorIntelligence {
       if (cfCountry && COUNTRY_REGISTRY[cfCountry]) {
         return COUNTRY_REGISTRY[cfCountry];
       }
-      return { countryCode: 'LOCAL', countryName: 'Local Development Host', flag: '📍', lat: 20.59, lng: 78.96 };
+      return { countryCode: 'LOCAL', countryName: 'Local Development Host (Haryana)', flag: '📍', lat: 28.7041, lng: 76.9535 };
     }
 
     if (cfCountry && cfCountry.length === 2) {
@@ -132,30 +134,48 @@ export class VisitorIntelligence {
     // Trigger background IP Geo lookup if public IP
     this.lookupPublicIpGeo(ip);
 
-    return { countryCode: 'IN', countryName: 'India', flag: '🇮🇳', lat: 20.59, lng: 78.96 };
+    return { countryCode: 'IN', countryName: 'India', flag: '🇮🇳', lat: 28.7041, lng: 76.9535 };
   }
 
   private lookupPublicIpGeo(ip: string): void {
     if (!ip || VisitorIntelligence.geoIpCache.has(ip)) return;
-    VisitorIntelligence.geoIpCache.set(ip, { countryCode: 'IN', countryName: 'India', flag: '🇮🇳', lat: 20.59, lng: 78.96 });
+    VisitorIntelligence.geoIpCache.set(ip, { countryCode: 'IN', countryName: 'India', flag: '🇮🇳', lat: 28.7041, lng: 76.9535 });
     try {
-      fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,lat,lon`)
+      fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,lat,lon`)
         .then((res) => (res.ok ? res.json() : null))
         .then((data: any) => {
           if (data && data.status === 'success' && data.countryCode) {
             const code = data.countryCode.toUpperCase();
             const flag = getFlagEmoji(code);
+            const cityName = data.city || data.regionName ? `${data.city ? data.city + ', ' : ''}${data.regionName || ''}` : data.country || code;
             VisitorIntelligence.geoIpCache.set(ip, {
               countryCode: code,
-              countryName: data.country || code,
+              countryName: cityName,
               flag,
-              lat: data.lat || 20.0,
-              lng: data.lon || 0.0,
+              lat: data.lat || 28.7041,
+              lng: data.lon || 76.9535,
             });
           }
         })
         .catch(() => {});
     } catch {}
+  }
+
+  public updateGpsFix(ip: string, lat: number, lng: number, accuracy?: number): boolean {
+    let updated = false;
+    for (const v of this.visitors.values()) {
+      if (v.ip === ip || ip === '127.0.0.1' || ip === 'localhost') {
+        v.lat = lat;
+        v.lng = lng;
+        v.accuracy = accuracy;
+        v.isGpsFix = true;
+        if (lat >= 27.5 && lat <= 31.0 && lng >= 74.0 && lng <= 78.5) {
+          v.countryName = 'Haryana, India';
+        }
+        updated = true;
+      }
+    }
+    return updated;
   }
 
   public getBlockedCount(): number {

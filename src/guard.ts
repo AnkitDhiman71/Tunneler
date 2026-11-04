@@ -135,6 +135,23 @@ export class PinGuardProxy {
       return;
     }
 
+    // Exact GPS Location Telemetry Report
+    if (url.pathname === '/__peer_report_location' && req.method === 'POST') {
+      let body = '';
+      req.on('data', (chunk) => (body += chunk));
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          if (typeof data.lat === 'number' && typeof data.lng === 'number') {
+            this.telemetry.updateVisitorGps(clientIp, data.lat, data.lng, data.accuracy);
+          }
+        } catch {}
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
+      });
+      return;
+    }
+
     // 1. Admin Login POST
     if (url.pathname === '/__peer_admin_login' && req.method === 'POST') {
       let body = '';

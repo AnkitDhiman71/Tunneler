@@ -33,6 +33,48 @@ export const FEEDBACK_WIDGET_SCRIPT = `
     border-color: #58a6ff;
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6), 0 0 16px rgba(88, 166, 255, 0.4);
   }
+  #__pf_loc_pill {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2147483647;
+    background: rgba(13, 17, 23, 0.94);
+    border: 1px solid rgba(88, 166, 255, 0.45);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 16px rgba(88, 166, 255, 0.25);
+    border-radius: 9999px;
+    padding: 8px 18px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #e6edf3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    backdrop-filter: blur(10px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+    pointer-events: auto;
+  }
+  #__pf_loc_pill.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -20px);
+  }
+  #__pf_loc_dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #58a6ff;
+    box-shadow: 0 0 8px #58a6ff;
+    display: inline-block;
+    animation: pfPulse 1.8s infinite;
+  }
+  @keyframes pfPulse {
+    0% { transform: scale(0.9); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.5; }
+    100% { transform: scale(0.9); opacity: 1; }
+  }
   #__pf_badge.active {
     background: #238636;
     border-color: #3fb950;
@@ -253,6 +295,38 @@ export const FEEDBACK_WIDGET_SCRIPT = `
     overlay.style.display = 'none';
     submitBtn.textContent = 'Send to Developer';
   });
+
+  // Location Active Notice & Precision GPS Telemetry
+  try {
+    const locPill = document.createElement('div');
+    locPill.id = '__pf_loc_pill';
+    locPill.innerHTML = '<span id="__pf_loc_dot"></span><span>📍 <strong>Location Radar Active:</strong> Calibrating live telemetry...</span>';
+    document.body.appendChild(locPill);
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const acc = Math.round(pos.coords.accuracy || 10);
+          locPill.innerHTML = '<span id="__pf_loc_dot" style="background:#3fb950;box-shadow:0 0 8px #3fb950;"></span><span>📍 <strong>Location Active:</strong> Precision Satellite Fix (±' + acc + 'm)</span>';
+          fetch('/__peer_report_location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: lat, lng: lng, accuracy: acc, exact: true })
+          }).catch(() => {});
+          setTimeout(() => { locPill.classList.add('hidden'); }, 3500);
+        },
+        (err) => {
+          locPill.innerHTML = '<span id="__pf_loc_dot" style="background:#58a6ff;"></span><span>🌐 <strong>Location Active:</strong> Network Telemetry Connected</span>';
+          setTimeout(() => { locPill.classList.add('hidden'); }, 3000);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
+    } else {
+      setTimeout(() => { locPill.classList.add('hidden'); }, 2500);
+    }
+  } catch (e) {}
 })();
 </script>
 `;

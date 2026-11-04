@@ -67,7 +67,7 @@ function getFlagEmoji(countryCode) {
   return String.fromCodePoint(...codePoints);
 }
 var COUNTRY_REGISTRY = {
-  IN: { countryCode: "IN", countryName: "India", flag: "\u{1F1EE}\u{1F1F3}", lat: 20.59, lng: 78.96 },
+  IN: { countryCode: "IN", countryName: "India", flag: "\u{1F1EE}\u{1F1F3}", lat: 28.7041, lng: 76.9535 },
   US: { countryCode: "US", countryName: "United States", flag: "\u{1F1FA}\u{1F1F8}", lat: 37.09, lng: -95.71 },
   GB: { countryCode: "GB", countryName: "United Kingdom", flag: "\u{1F1EC}\u{1F1E7}", lat: 55.37, lng: -3.43 },
   CA: { countryCode: "CA", countryName: "Canada", flag: "\u{1F1E8}\u{1F1E6}", lat: 56.13, lng: -106.34 },
@@ -137,35 +137,52 @@ var VisitorIntelligence = class _VisitorIntelligence {
       if (cfCountry && COUNTRY_REGISTRY[cfCountry]) {
         return COUNTRY_REGISTRY[cfCountry];
       }
-      return { countryCode: "LOCAL", countryName: "Local Development Host", flag: "\u{1F4CD}", lat: 20.59, lng: 78.96 };
+      return { countryCode: "LOCAL", countryName: "Local Development Host (Haryana)", flag: "\u{1F4CD}", lat: 28.7041, lng: 76.9535 };
     }
     if (cfCountry && cfCountry.length === 2) {
       const flag = getFlagEmoji(cfCountry);
       return { countryCode: cfCountry, countryName: `Region (${cfCountry})`, flag, lat: 20, lng: 0 };
     }
     this.lookupPublicIpGeo(ip);
-    return { countryCode: "IN", countryName: "India", flag: "\u{1F1EE}\u{1F1F3}", lat: 20.59, lng: 78.96 };
+    return { countryCode: "IN", countryName: "India", flag: "\u{1F1EE}\u{1F1F3}", lat: 28.7041, lng: 76.9535 };
   }
   lookupPublicIpGeo(ip) {
     if (!ip || _VisitorIntelligence.geoIpCache.has(ip)) return;
-    _VisitorIntelligence.geoIpCache.set(ip, { countryCode: "IN", countryName: "India", flag: "\u{1F1EE}\u{1F1F3}", lat: 20.59, lng: 78.96 });
+    _VisitorIntelligence.geoIpCache.set(ip, { countryCode: "IN", countryName: "India", flag: "\u{1F1EE}\u{1F1F3}", lat: 28.7041, lng: 76.9535 });
     try {
-      fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,lat,lon`).then((res) => res.ok ? res.json() : null).then((data) => {
+      fetch(`http://ip-api.com/json/${ip}?fields=status,country,countryCode,regionName,city,lat,lon`).then((res) => res.ok ? res.json() : null).then((data) => {
         if (data && data.status === "success" && data.countryCode) {
           const code = data.countryCode.toUpperCase();
           const flag = getFlagEmoji(code);
+          const cityName = data.city || data.regionName ? `${data.city ? data.city + ", " : ""}${data.regionName || ""}` : data.country || code;
           _VisitorIntelligence.geoIpCache.set(ip, {
             countryCode: code,
-            countryName: data.country || code,
+            countryName: cityName,
             flag,
-            lat: data.lat || 20,
-            lng: data.lon || 0
+            lat: data.lat || 28.7041,
+            lng: data.lon || 76.9535
           });
         }
       }).catch(() => {
       });
     } catch {
     }
+  }
+  updateGpsFix(ip, lat, lng, accuracy) {
+    let updated = false;
+    for (const v of this.visitors.values()) {
+      if (v.ip === ip || ip === "127.0.0.1" || ip === "localhost") {
+        v.lat = lat;
+        v.lng = lng;
+        v.accuracy = accuracy;
+        v.isGpsFix = true;
+        if (lat >= 27.5 && lat <= 31 && lng >= 74 && lng <= 78.5) {
+          v.countryName = "Haryana, India";
+        }
+        updated = true;
+      }
+    }
+    return updated;
   }
   getBlockedCount() {
     return this.blockedIps.size;
@@ -827,6 +844,25 @@ var AdminTelemetry = class {
   }
   toggleBlockVisitorIp(ip) {
     return this.visitorIntel.toggleBlockIp(ip);
+  }
+  updateVisitorGps(ip, lat, lng, accuracy) {
+    const updated = this.visitorIntel.updateGpsFix(ip, lat, lng, accuracy);
+    for (const t of this.remoteTunnels.values()) {
+      if (t.visitors) {
+        for (const v of t.visitors) {
+          if (v.ip === ip || ip === "127.0.0.1" || ip === "localhost") {
+            v.lat = lat;
+            v.lng = lng;
+            v.accuracy = accuracy;
+            v.isGpsFix = true;
+            if (lat >= 27.5 && lat <= 31 && lng >= 74 && lng <= 78.5) {
+              v.countryName = "Haryana, India";
+            }
+          }
+        }
+      }
+    }
+    return updated;
   }
   statusCounts = {
     "2xx": 0,
@@ -1887,8 +1923,8 @@ var AdminTelemetry = class {
         };
 
         leafletMap = L.map('leaflet-satellite-map', {
-          center: [20.59, 78.96],
-          zoom: 3,
+          center: [28.7041, 76.9535],
+          zoom: 5,
           minZoom: 2,
           maxZoom: 18,
           layers: [satGroup],
@@ -1920,7 +1956,7 @@ var AdminTelemetry = class {
 
     function resetMapView() {
       if (!leafletMap) return;
-      leafletMap.setView([20.59, 78.96], 3, { animate: true });
+      leafletMap.setView([28.7041, 76.9535], 5, { animate: true });
     }
 
     function updateMapMarkers(countries, visitors) {
@@ -1941,14 +1977,16 @@ var AdminTelemetry = class {
           popupAnchor: [0, -18],
         });
 
-        const countryVisitors = visList.filter(v => v.countryCode === c.code);
+        const countryVisitors = visList.filter(v => v.countryCode === c.code || (c.code === 'IN' && v.countryCode === 'LOCAL'));
+        const hasGps = countryVisitors.some(v => v.isGpsFix);
         const topRoutes = Array.from(new Set(countryVisitors.flatMap(v => v.visitedRoutes || []))).slice(0, 3);
 
         const popupHtml = '<div class="map-popup-card">' +
           '<div class="map-popup-title">' + (c.flag || '') + ' ' + (c.name || 'Visitor') + '</div>' +
           '<div class="map-popup-row"><span>Status:</span><span class="map-popup-val" style="color: #3fb950;">\u{1F7E2} Live Traffic</span></div>' +
+          (hasGps ? '<div class="map-popup-row"><span>Precision:</span><span class="map-popup-val" style="color: #3fb950;">\u{1F6F0}\uFE0F Exact Satellite GPS Fix</span></div>' : '') +
           '<div class="map-popup-row"><span>Total Requests:</span><span class="map-popup-val">' + (c.requests || 1) + '</span></div>' +
-          '<div class="map-popup-row"><span>Coordinates:</span><span class="map-popup-val">' + c.lat.toFixed(2) + '\xB0, ' + c.lng.toFixed(2) + '\xB0</span></div>' +
+          '<div class="map-popup-row"><span>Coordinates:</span><span class="map-popup-val">' + c.lat.toFixed(4) + '\xB0, ' + c.lng.toFixed(4) + '\xB0</span></div>' +
           (topRoutes.length ? '<div class="map-popup-row"><span>Routes:</span><span class="map-popup-val" style="font-family: monospace;">' + topRoutes.join(', ') + '</span></div>' : '') +
           '</div>';
 
@@ -2421,6 +2459,48 @@ var FEEDBACK_WIDGET_SCRIPT = `
     border-color: #58a6ff;
     box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6), 0 0 16px rgba(88, 166, 255, 0.4);
   }
+  #__pf_loc_pill {
+    position: fixed;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2147483647;
+    background: rgba(13, 17, 23, 0.94);
+    border: 1px solid rgba(88, 166, 255, 0.45);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7), 0 0 16px rgba(88, 166, 255, 0.25);
+    border-radius: 9999px;
+    padding: 8px 18px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    font-size: 12.5px;
+    font-weight: 500;
+    color: #e6edf3;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    backdrop-filter: blur(10px);
+    transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    user-select: none;
+    pointer-events: auto;
+  }
+  #__pf_loc_pill.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -20px);
+  }
+  #__pf_loc_dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #58a6ff;
+    box-shadow: 0 0 8px #58a6ff;
+    display: inline-block;
+    animation: pfPulse 1.8s infinite;
+  }
+  @keyframes pfPulse {
+    0% { transform: scale(0.9); opacity: 1; }
+    50% { transform: scale(1.4); opacity: 0.5; }
+    100% { transform: scale(0.9); opacity: 1; }
+  }
   #__pf_badge.active {
     background: #238636;
     border-color: #3fb950;
@@ -2641,6 +2721,38 @@ var FEEDBACK_WIDGET_SCRIPT = `
     overlay.style.display = 'none';
     submitBtn.textContent = 'Send to Developer';
   });
+
+  // Location Active Notice & Precision GPS Telemetry
+  try {
+    const locPill = document.createElement('div');
+    locPill.id = '__pf_loc_pill';
+    locPill.innerHTML = '<span id="__pf_loc_dot"></span><span>\u{1F4CD} <strong>Location Radar Active:</strong> Calibrating live telemetry...</span>';
+    document.body.appendChild(locPill);
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const acc = Math.round(pos.coords.accuracy || 10);
+          locPill.innerHTML = '<span id="__pf_loc_dot" style="background:#3fb950;box-shadow:0 0 8px #3fb950;"></span><span>\u{1F4CD} <strong>Location Active:</strong> Precision Satellite Fix (\xB1' + acc + 'm)</span>';
+          fetch('/__peer_report_location', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat: lat, lng: lng, accuracy: acc, exact: true })
+          }).catch(() => {});
+          setTimeout(() => { locPill.classList.add('hidden'); }, 3500);
+        },
+        (err) => {
+          locPill.innerHTML = '<span id="__pf_loc_dot" style="background:#58a6ff;"></span><span>\u{1F310} <strong>Location Active:</strong> Network Telemetry Connected</span>';
+          setTimeout(() => { locPill.classList.add('hidden'); }, 3000);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
+    } else {
+      setTimeout(() => { locPill.classList.add('hidden'); }, 2500);
+    }
+  } catch (e) {}
 })();
 </script>
 `;
@@ -2742,6 +2854,22 @@ var PinGuardProxy = class {
           const data = JSON.parse(body);
           if (data && data.id) {
             this.telemetry.remoteTunnels.delete(data.id);
+          }
+        } catch {
+        }
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ success: true }));
+      });
+      return;
+    }
+    if (url.pathname === "/__peer_report_location" && req.method === "POST") {
+      let body = "";
+      req.on("data", (chunk) => body += chunk);
+      req.on("end", () => {
+        try {
+          const data = JSON.parse(body);
+          if (typeof data.lat === "number" && typeof data.lng === "number") {
+            this.telemetry.updateVisitorGps(clientIp, data.lat, data.lng, data.accuracy);
           }
         } catch {
         }

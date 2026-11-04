@@ -5,7 +5,7 @@ import {
   WebRtcBridge,
   startGlobalTunnel,
   startPeerTunnel
-} from "./chunk-MHZIKYGC.js";
+} from "./chunk-ZIPQQRR2.js";
 
 // src/index.ts
 var startTunnel = startGlobalTunnel;
